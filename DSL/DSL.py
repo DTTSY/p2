@@ -8,6 +8,8 @@ from matplotlib import pyplot as plt
 from networkx import shortest_path
 np.random.seed(0)
 
+like_count = 0
+
 
 def nearest_neighbor_cal(feature_space):
     neighbors = NearestNeighbors(n_neighbors=2).fit(feature_space)
@@ -108,10 +110,15 @@ def skeleton_reconstruction_like(skeleton, anomaly):
 
 
 def connections_cal(edge, representatives, data):
+    e = edge[0]
     connections = []
-    for representative in representatives:
-        euc_distance = distance.euclidean(data[edge[0]], data[representative])
-        connections.append([edge[0], representative, euc_distance])
+    connections = [[e, int(r), np.linalg.norm(
+        data[e]-data[int(r)])] for r in representatives]
+    # [e, representative, euc_distance]
+
+    # for representative in representatives:
+    #     euc_distance = np.linalg.norm(data[e]-data[representative])
+    #     connections.append([e, representative, euc_distance])
     connections = np.array(connections)
     sorted_indices = np.argsort(connections[:, 2])
     connections = connections[sorted_indices]
@@ -121,31 +128,31 @@ def connections_cal(edge, representatives, data):
 def skeleton_reconstruction_dislike(skeleton: nx.Graph, anomaly, representatives, data, real_labels, constraint_graph, count):
     skeleton.remove_edge(anomaly[0], anomaly[1])
     connections = connections_cal(anomaly, representatives, data)
+    # connections = [[]]
+    # connections = [[anomaly[0], r] for r in representatives]
     find = False
     for connection in connections:
         constraint_graph, result, judgement_type = judgement(
             connection, constraint_graph, real_labels)
         if judgement_type == "human":
-            count = count + 1
+            count += 1
         if result == "like":
             find = True
-            node1 = int(connection[0])
-            node2 = int(connection[1])
-            in_degree_node1 = skeleton.in_degree(node1)
-            in_degree_node2 = skeleton.in_degree(node2)
+            node1 = connection[0]
+            node2 = connection[1]
+
             # 修改两个候选点的uncertainty
-            skeleton.nodes[node1]["uncertainty"] = 0
-            skeleton.nodes[node2]["uncertainty"] = 0
-            if in_degree_node1 > in_degree_node2:
-                representatives.remove(node2)
-                representatives.append(node1)
+            if skeleton.in_degree(node1) > skeleton.in_degree(node2):
                 skeleton.add_edge(node2, node1)
+                representatives.remove(node2)
+
+                if node1 not in representatives:
+                    representatives.append(node1)
             else:
                 skeleton.add_edge(node1, node2)
             break
-    if find == False:
-        representatives.append(anomaly[0])
-        skeleton.nodes[anomaly[0]]["uncertainty"] = 0
+    if not find:
+        representatives.append(int(anomaly[0]))
     return skeleton, representatives, constraint_graph, count
 
 
@@ -174,9 +181,6 @@ def uncertainty_propagation_dislike(skeleton, anomaly, beta):
 
 
 def skeleton_reconstruction(skeleton, anomaly, representatives, data, real_labels, constraint_graph, count, result):
-    if result == "like":
-        # print(f'skeleton_reconstruction like')
-        skeleton = skeleton_reconstruction_like(skeleton, anomaly)
     if result == "dislike":
         # print(f'skeleton_reconstruction dislike')
         skeleton, representatives, constraint_graph, count = skeleton_reconstruction_dislike(
@@ -206,30 +210,28 @@ def draw_contraint_graph(constraint_G):
 
 
 def anomaly_detection(Graph: nx.Graph):
-    max_value_node = None
-    max_value = float('-inf')
+    max_value_node: int = None
+    suspend = False
+    max_value = -1e5
     for node, data in Graph.nodes(data=True):
-        if 'uncertainty' in data and data['uncertainty'] > max_value:
+        if data['uncertainty'] > max_value:
             max_value = data['uncertainty']
             max_value_node = node
     uncertain_node = max_value_node
     # print(f'uncertain_node: {uncertain_node}')
     anomaly = list(Graph.out_edges(uncertain_node))
-    # print('out_edges', anomaly)
+    # print('out_edges', anomaly, f'max uncertainty: {max_value}')
     # print('in_edges', list(Graph.in_edges(uncertain_node)))
+    # print(anomaly)
     if anomaly:
         anomaly = anomaly[0]
-    ##########
-    # else:
-    #     anomaly = list(Graph.in_edges(uncertain_node))
-    #     if anomaly:
-    #         anomaly = anomaly[0]
-    ############
-    suspend = False
-    if Graph.nodes[uncertain_node]["uncertainty"] == 0:
-        print(f'suspend {suspend}')
+        Graph.nodes[uncertain_node]["uncertainty"] = 0
+        # print(f'anomaly: {anomaly}')
+
+    if max_value == 0:
+        print(f'suspend')
         suspend = True
-    # Graph.nodes[uncertain_node]["uncertainty"] = 0
+
     return anomaly, suspend
 
 
@@ -272,8 +274,10 @@ def constraint_judgement(G, pairwise):
 
 
 def judgement(anomaly, constraint_graph, real_labels):
-    pairwise = [int(anomaly[0]), int(anomaly[1])]
-    result = constraint_judgement(constraint_graph, pairwise)
+    # pairwise = [int(anomaly[0]), int(anomaly[1])]
+    pairwise = list(anomaly)
+    # result = constraint_judgement(constraint_graph, pairwise)
+    result = "unknown"
     if result == "unknown":
         constraint_graph, result = human_judgement(
             pairwise, real_labels, constraint_graph)
@@ -291,7 +295,7 @@ def iteration_once(skeleton, representatives, data, real_labels, constraint_grap
         constraint_graph, result, judgement_type = judgement(
             anomaly, constraint_graph, real_labels)
         if judgement_type == "human":
-            count = count + 1
+            count += 1
         skeleton, representatives, constraint_graph, count = skeleton_reconstruction(
             skeleton, anomaly, representatives, data, real_labels, constraint_graph, count, result)
     return skeleton, representatives, constraint_graph, count, suspend

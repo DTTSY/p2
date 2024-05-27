@@ -103,6 +103,6 @@ def dynamic_selection(real_labels, candidates, neighbors, x, count):
                     neighbors[j].append(point1)
             find = True
             break
-    if find == False:
+    if not find:
         neighbors.append([x])
     return neighbors, count

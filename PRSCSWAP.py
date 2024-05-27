@@ -24,6 +24,7 @@ class PRS():
         self.nx_graph = nx.DiGraph()
         self.results = None
         self.s_score = {}
+        self.boundary_points_ = set()
 
     def divide_data_random(self, k):
         d = self.data.take(np.random.permutation(self.data.shape[0]))
@@ -83,7 +84,9 @@ class PRS():
         edges = self.iteraction(sub_data, threshold_clusters)
 
         # for k, v in edges2community(edges).items(): print('1-',len(v))
-        edges.update(self.swap(edges))
+
+        # edges.update(self.swap(edges))
+
         # for k, v in edges2community(edges).items(): print('2-', len(v))
         edges.update(self.check_tiny_community(edges))
         # for k, v in edges2community(edges).items(): print('3-',len(v))
@@ -126,11 +129,11 @@ class PRS():
         clustering_tree, roots = get_tree(edges)
         # self.nx_graph.add_edges_from([(v, k) for k, v in edges.items()])
         self.nx_graph.add_edges_from(edges.items())
-        self.nx_graph = nx.DiGraph.reverse(self.nx_graph)
+        # self.nx_graph = nx.DiGraph.reverse(self.nx_graph)
         # print('clustering_tree : ', clustering_tree)
         # print('roots : ', roots)
         self.final_tree['tree'] = clustering_tree
-        self.final_tree['roots'] = roots
+        self.final_tree['roots'] = list(roots)
 
         self.results = get_groups(roots, clustering_tree)
         # print('results: ', self.results)
