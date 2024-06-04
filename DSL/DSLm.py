@@ -127,18 +127,19 @@ def connections_cal(edge, representatives, data):
     return connections
 
 
-def skeleton_reconstruction_dislike(skeleton: nx.Graph, anomaly, representatives, data, real_labels, constraint_graph, count):
+def get_oricle_label(real_labels, pair):
+    return real_labels[int(pair[0])] == real_labels[int(pair[1])]
+
+
+def skeleton_reconstruction_dislike(skeleton: nx.Graph, anomaly, representatives: list, data, real_labels, constraint_graph, count):
     skeleton.remove_edge(anomaly[0], anomaly[1])
     connections = connections_cal(anomaly, representatives, data)
     # connections = [[]]
     # connections = [[anomaly[0], r] for r in representatives]
     find = False
     for connection in connections:
-        constraint_graph, result, judgement_type = judgement(
-            connection, constraint_graph, real_labels)
-        if judgement_type == "human":
-            count += 1
-        if result == "like":
+        count += 1
+        if get_oricle_label(real_labels, connection):
             find = True
             node1 = connection[0]
             node2 = connection[1]
@@ -294,7 +295,7 @@ def selct(uranck, Graph: nx.Graph):
         raise ValueError('uranck is None')
     suspend = False
     anomaly = []
-    if len(uranck) > 1:
+    if uranck:
         uncertain_node = uranck.pop()
         # uncertain_node, _ = uranck.pop()
         anomaly = list(Graph.out_edges(uncertain_node))
@@ -312,15 +313,15 @@ def iteration_once(skeleton, representatives, data, real_labels, constraint_grap
     # anomaly, suspend = anomaly_detection(skeleton)
     anomaly, suspend = selct(uranck, skeleton)
     # print(f'anomaly: {anomaly}')
+    result = 'dislike'
     if anomaly:
-        constraint_graph, result, judgement_type = judgement(
-            anomaly, constraint_graph, real_labels)
-        if judgement_type == "human":
-            count += 1
+        if get_oricle_label(real_labels, anomaly):
+            result = "like"
+        count += 1
         skeleton, representatives, constraint_graph, count = skeleton_reconstruction(
             skeleton, anomaly, representatives, data, real_labels, constraint_graph, count, result)
     return skeleton, representatives, constraint_graph, count, suspend
 
 
 if __name__ == '__main__':
-    print('DSL main is not callable')
+    raise ValueError('DSLm main is not callable')

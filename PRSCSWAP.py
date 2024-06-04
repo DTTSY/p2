@@ -85,7 +85,7 @@ class PRS():
 
         # for k, v in edges2community(edges).items(): print('1-',len(v))
 
-        # edges.update(self.swap(edges))
+        edges.update(self.swap(edges))
 
         # for k, v in edges2community(edges).items(): print('2-', len(v))
         edges.update(self.check_tiny_community(edges))
@@ -905,14 +905,15 @@ if __name__ == '__main__':
     data_names = ["iris", "sonar", "glass", "ecoli", "ionosphere", "kdd_synthetic_control", "vehicle",
                   "mfeat-fourier", "mfeat-karhunen", "mfeat-zernike", "segment", "waveform-5000", "optdigits", "letter", "avila"]
     data_Ks = [3, 2, 2, 8, 2, 6, 4, 10, 10, 10, 7, 3, 9, 26, 12]
-
+    evaluation = {'name': [], 'ARI': [],
+                  'NMI': [], 'RI': [], 'K': [], 'theta': []}
     for i in range(len(data_names)):
         data_name = data_names[i]
         K = data_Ks[i]
         file_name = 'exp_disturbed/' + data_name + '.txt'
         rdata, label, K = DataLoader.get_data_from_local(file_name)
-        if len(label) > 1e3:
-            continue
+        # if len(label) > 1e3:
+        #     continue
         # print(data_name)
         theta = 1
         flag = True
@@ -951,8 +952,8 @@ if __name__ == '__main__':
             # draw_matrix(prs.results)
             # print(prs.results)
             r = prs.get_results()
-            print(f"len of s_score{len(prs.s_score)}")
-            print(prs.s_score)
+            # print(f"len of s_score{len(prs.s_score)}")
+            # print(prs.s_score)
             ET, roots = prs.get_final_tree_nx()
             # print(len(r),';',r)
 
@@ -969,7 +970,7 @@ if __name__ == '__main__':
             # print(r)
             # print('waite for estimation!')
             r = r.tolist()
-            print(f'len of r{len(r)} and k {k}')
+            # print(f'len of r{len(r)} and k {k}')
             ri = rand_score(label[:len(r)], r)
             ari = adjusted_rand_score(label[:len(r)], r)
             nmi = normalized_mutual_info_score(label[:len(r)], r)
@@ -980,7 +981,14 @@ if __name__ == '__main__':
             end = time.time()
             # print(end - start)
         if flag == True:
+            evaluation['name'].append(data_name)
+            evaluation['ARI'].append(ARI_ave / ts)
+            evaluation['NMI'].append(NMI_ave / ts)
+            evaluation['RI'].append(RI_ave / ts)
+            evaluation['K'].append(K)
+
             print(data_name, '\tRI : ', RI_ave / ts)
             print(data_name, '\tARI: ', ARI_ave / ts)
             print(data_name, '\tNMI: ', NMI_ave / ts)
     # output.close()
+    pd.DataFrame(evaluation).to_csv('PRSCevaluation.csv', index=False)

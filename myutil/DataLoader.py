@@ -1,21 +1,23 @@
 from ucimlrepo import fetch_ucirepo, list_available_datasets
-from sklearn.preprocessing import MinMaxScaler, LabelEncoder
+from sklearn.preprocessing import MinMaxScaler, LabelEncoder, StandardScaler
 import numpy as np
 import pandas as pd
 
 
 def preprocess_data(dataset_path: str, doPerturb: bool):
-    df = pd.read_csv(dataset_path, header=None)
+    df = pd.read_csv(dataset_path)
     # drop the duplicate rows
     df.dropna(inplace=True)
     df.drop_duplicates(inplace=True)
     # drop the rows with missing values
-    df.reset_index(inplace=True, drop=True)
+    # df.reset_index(inplace=True, drop=True)
 
     data = df.iloc[:, :-1].values
     label = df.iloc[:, -1]
     le = LabelEncoder()
     label = le.fit_transform(label)
+    # data = MinMaxScaler().fit_transform(data)
+    # data = StandardScaler().fit_transform(data)
 
     k = np.unique(label)
     k = k.shape[0]
@@ -110,6 +112,7 @@ def get_syc_data(blockSize: list, blockNum: int):
 
 
 if __name__ == '__main__':
+    raise Exception('This is a module, not a script!')
     data = ['Balance', 'banknote', 'breast', 'dermatology', 'diabetes', 'ecoli', 'glass', 'haberman', 'ionosphere', 'iris',
             'led', 'mfeat karhunen', 'mfeat zernike', 'musk', 'pima', 'seeds', 'segment', 'soybean', 'thyroid', 'vehicle', 'wine']
     for i in data:
