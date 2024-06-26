@@ -14,6 +14,9 @@ from sklearn.neighbors import NearestNeighbors
 # from sklearn.preprocessing import LabelEncoder
 from myutil import DataLoader
 import networkx as nx
+import os
+from myutil.retry import retry
+from joblib import Parallel, delayed
 
 
 class PRS():
@@ -25,6 +28,11 @@ class PRS():
         self.results = None
         self.s_score = {}
         self.boundary_points_ = set()
+        self.subroots = set()
+        self.ssubroots = set()
+
+    def get_subroots(self):
+        return list(self.subroots)
 
     def divide_data_random(self, k):
         d = self.data.take(np.random.permutation(self.data.shape[0]))
@@ -134,6 +142,8 @@ class PRS():
         # print('roots : ', roots)
         self.final_tree['tree'] = clustering_tree
         self.final_tree['roots'] = list(roots)
+        for r in roots:
+            self.nx_graph.remove_edge(r, r)
 
         self.results = get_groups(roots, clustering_tree)
         # print('results: ', self.results)
@@ -164,7 +174,7 @@ class PRS():
         new_bn = []
         # print('len of sub data:', len(sub_data))
         thr = [cluster(i, sub_data[i], sub_clusters, self.boundary_nodes,
-                       threshold_clusters, self.s_score) for i in range(len(sub_data))]
+                       threshold_clusters, self.s_score, self.ssubroots) for i in range(len(sub_data))]
         for t in thr:
             t.start()
         for t in thr:
@@ -207,6 +217,7 @@ class PRS():
     def reduce(self, edges, roots, threshold_clusters):
         # print('sub_clusters:', sub_clusters)
         roots = get_roots_from_edges(edges)
+        self.subroots.update(roots)
         # # additional_edges = {}
         #
         # for c, p in edges.items():
@@ -596,7 +607,7 @@ def get_boundary_cross(data, times):
 
 
 class cluster(threading.Thread):
-    def __init__(self, threadID, data, sub_clusters, bondary_nodes, threshold_clusters, s_score={}):
+    def __init__(self, threadID, data, sub_clusters, bondary_nodes, threshold_clusters, s_score={}, subroots: set = None):
         threading.Thread.__init__(self)
         self.data = data
         self.threadID = threadID
@@ -604,13 +615,13 @@ class cluster(threading.Thread):
         self.sub_clusters = sub_clusters
         self.boundary_nodes = bondary_nodes
         self.s_score = s_score
+        self.subroots = subroots
 
     def run(self):
         self.sub_clusters.append(self.aggregate(
             self.data, self.boundary_nodes))
 
     def aggregate(self, data: pd.DataFrame, boundary_nodes):
-
         # row_names = data.columns.values.tolist()
         row_names = data.index.values.tolist()
         # row_names = data._stat_axis.values.tolist()
@@ -655,6 +666,7 @@ class cluster(threading.Thread):
             #      每跟根点指向自己作为根节点的标记。
             for i in row_names:
                 edges[i] = i
+                # self.subroots.add(i)
             sup_nodes = set()
 
         # print('181-update:', edges)
@@ -898,6 +910,32 @@ def edges2tree(edges):
 #     plt.scatter(data[:, 0], data[:, 1])
 #     plt.show()
 
+def get_clusters_predict_labels(Graph: nx.Graph):
+    S = [Graph.subgraph(c) for c in nx.weakly_connected_components(Graph)]
+    predict_labels = np.zeros(len(Graph.nodes), dtype=int)
+
+    for i, s in enumerate(S[1:], 1):
+        predict_labels[list(s.nodes)] = i
+    return predict_labels
+
+
+@retry(retries=3, delay=0)
+def run_PRSC(data, label, K, theta, loop=1):
+    num_thread = math.ceil(math.ceil(len(label) / (theta * 100)))
+    # print(label)
+    for i in range(loop):
+        prs = PRS(data)
+        prs.get_clusters(num_thread, threshold_clusters=K)
+        # draw_matrix(prs.results)
+        # print(prs.results)
+        prs.get_results()
+        ET, roots = prs.get_final_tree_nx()
+
+        assert len(roots) == K
+        assert len(ET.nodes) == data.shape[0]
+        assert len(ET.edges) == data.shape[0] - K
+    return ET
+
 
 if __name__ == '__main__':
     # {"breast-w", "ecoli", "glass", "ionosphere", "iris", "kdd_synthetic_control", "mfeat-fourier", "mfeat-karhunen","mfeat-zernike"};
@@ -905,90 +943,89 @@ if __name__ == '__main__':
     data_names = ["iris", "sonar", "glass", "ecoli", "ionosphere", "kdd_synthetic_control", "vehicle",
                   "mfeat-fourier", "mfeat-karhunen", "mfeat-zernike", "segment", "waveform-5000", "optdigits", "letter", "avila"]
     data_Ks = [3, 2, 2, 8, 2, 6, 4, 10, 10, 10, 7, 3, 9, 26, 12]
-    evaluation = {'name': [], 'ARI': [],
-                  'NMI': [], 'RI': [], 'K': [], 'theta': []}
-    for i in range(len(data_names)):
-        data_name = data_names[i]
+    evaluation = {'Name': [], 'ARI': [],
+                  'NMI': [], 'RI': [], 'K': [], 'Theta': []}
+    os.makedirs('result/PRSC', exist_ok=True)
+    datapath = 'G:/data/datasets/UCI/middle/data/'
+    file_names = os.listdir(datapath)
+    info = {'Dataset': [], 'Samples': [], 'Features': [], 'Class': [], }
+
+    for i in range(len(file_names)):
+        df = {"ARI": [], "RI": [], "NMI": [], "K": [], "theta": []}
+        # data_name = data_names[i]
+        data_name = file_names[i].split('.')[0]
         K = data_Ks[i]
-        file_name = 'exp_disturbed/' + data_name + '.txt'
-        rdata, label, K = DataLoader.get_data_from_local(file_name)
-        # if len(label) > 1e3:
-        #     continue
+        # file_name = 'exp_disturbed/' + data_name + '.txt'
+        file_name = file_names[i]
+        rdata, label, K = DataLoader.get_data_from_local(
+            f'{datapath}{file_name}')
+
+        info['Dataset'].append(data_name)
+        info['Samples'].append(rdata.shape[0])
+        info['Features'].append(rdata.shape[1])
+        info['Class'].append(K)
+
+        if len(label) < 1e3:
+            continue
         # print(data_name)
         theta = 1
         flag = True
-        ts = 10
+        ts = 1
         RI_ave = 0
         ARI_ave = 0
         NMI_ave = 0
+
+        data = rdata.copy()
+        data = (data - data.mean()) / (data.std())
         for t in range(ts):
-            data = rdata.copy()
-            # rdata = pd.read_csv(file_name, header=None)
-            # print(rdata)
-            # rdata = rdata.sample(frac=1).reset_index(drop=True)
-            # print(rdata)
+            start = time.perf_counter()
+            ET = run_PRSC(data, label, K, theta)
+            end = time.perf_counter()
 
-            # rdata.dropna(inplace=True)
-            # rdata.drop_duplicates(inplace=True)
-            # rdata.reset_index(drop=True, inplace=True)
-            # data = shuffle(data)
-
-            # data = rdata.iloc[:, :-1]
-            # label = rdata.iloc[:, -1]
-            data = (data - data.mean()) / (data.std())
-            # 使用sklearn 给label编码
-            # le = LabelEncoder()
-            # label = le.fit_transform(label)
-            # label = label.tolist()
-            # print(f"data shape {data.shape} label shape {label.shape}")
-            num_thread = math.ceil(math.ceil(len(label) / (theta * 100)))
-            # print(label)
-            prs = PRS(data)
-            start = time.time()
-
-            threshold_clusters = K
-
-            prs.get_clusters(num_thread, threshold_clusters)
-            # draw_matrix(prs.results)
-            # print(prs.results)
-            r = prs.get_results()
-            # print(f"len of s_score{len(prs.s_score)}")
-            # print(prs.s_score)
-            ET, roots = prs.get_final_tree_nx()
-            # print(len(r),';',r)
-
-            k = len(set(r.values()))
-            # if k != threshold_clusters:
-            #     ts = ts -1
-            #     continue
-            # print('k =', k)
-            end = time.time()
             # print('cpu time:', end - start)
-            r = np.array(sorted(r.items(), key=lambda item: item[0]))[:, 1]
+            # r = np.array(sorted(r.items(), key=lambda item: item[0]))[:, 1]
             # rm = np.array(sorted(rm.items(), key=lambda item: item[0]))[:, 1]
             # print(f'the diff of r and rm is {np.sum(r-rm)}')
             # print(r)
             # print('waite for estimation!')
-            r = r.tolist()
+
+            # r = r.tolist()
             # print(f'len of r{len(r)} and k {k}')
-            ri = rand_score(label[:len(r)], r)
-            ari = adjusted_rand_score(label[:len(r)], r)
-            nmi = normalized_mutual_info_score(label[:len(r)], r)
+            # ri = rand_score(label[:len(r)], r)
+            # ari = adjusted_rand_score(label[:len(r)], r)
+            # nmi = normalized_mutual_info_score(label[:len(r)], r)
+
+            ri = rand_score(label, get_clusters_predict_labels(ET))
+            ari = adjusted_rand_score(label, get_clusters_predict_labels(ET))
+            nmi = normalized_mutual_info_score(
+                label, get_clusters_predict_labels(ET))
+
+            df["ARI"].append(ari)
+            df["RI"].append(ri)
+            df["NMI"].append(nmi)
+            df["K"].append(K)
+            df["theta"].append(theta)
 
             RI_ave = ri + RI_ave
             ARI_ave = ari + ARI_ave
             NMI_average = nmi + NMI_ave
-            end = time.time()
             # print(end - start)
+        pd.DataFrame(df).to_csv(f"result/PRSC/{data_name}.csv", index=False)
         if flag == True:
-            evaluation['name'].append(data_name)
+            evaluation['Name'].append(data_name)
             evaluation['ARI'].append(ARI_ave / ts)
             evaluation['NMI'].append(NMI_ave / ts)
             evaluation['RI'].append(RI_ave / ts)
             evaluation['K'].append(K)
+            evaluation['Theta'].append(theta*100)
 
             print(data_name, '\tRI : ', RI_ave / ts)
             print(data_name, '\tARI: ', ARI_ave / ts)
             print(data_name, '\tNMI: ', NMI_ave / ts)
-    # output.close()
-    pd.DataFrame(evaluation).to_csv('PRSCevaluation.csv', index=False)
+
+        pd.DataFrame(info).to_csv('DataInfo.csv', index=False)
+        # output.close()
+        eval = pd.DataFrame(evaluation)
+        # evaluation 根据RI排序，降序排列
+        eval = eval.sort_values(by='RI', ascending=False)
+        eval.to_csv('PRSCevaluation.csv', index=False)

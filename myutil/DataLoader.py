@@ -15,15 +15,15 @@ def preprocess_data(dataset_path: str, doPerturb: bool):
     data = df.iloc[:, :-1].values
     label = df.iloc[:, -1]
     le = LabelEncoder()
-    label = le.fit_transform(label)
+    le = le.fit(label)
+    label = le.transform(label)
     # data = MinMaxScaler().fit_transform(data)
     # data = StandardScaler().fit_transform(data)
 
-    k = np.unique(label)
-    k = k.shape[0]
+    k = le.classes_.shape[0]
 
     if doPerturb:
-        random_matrix = np.random.rand(data.shape[0], data.shape[1]) * 1e-6
+        random_matrix = np.random.rand(data.shape[0], data.shape[1]) * 1e-7
         data = data + random_matrix
     data = pd.DataFrame(data)
     return data, label, k
