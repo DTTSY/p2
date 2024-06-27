@@ -1,4 +1,3 @@
-import ADP.d_experiment
 from myutil import DataLoader
 
 from MinMax import MinMax
@@ -7,12 +6,14 @@ from ADP.d_experiment import experiment_adp
 from COBRAS.experiment.COBRAS import COBRAS
 from COBRA import cobra
 from ADPE.a import ADPE
+from DSL.main import DSL
 
 from joblib import Parallel, delayed
 
 import os
 import pandas as pd
 import warnings
+
 warnings.simplefilter('ignore')
 
 
@@ -39,8 +40,16 @@ def run(file: str) -> None:
 
     datalen = len(data)
     datalen = 1_000
+    data = (data - data.mean()) / (data.std())
 
-    print(f'run on {file}')
+    print(f'{os.getpid()}\trun on {file}')
+    print(f'run on DSL')
+    DSL_ARI = DSL(data, label, title=title, q=datalen)
+    DSLPath = 'result/DSL'
+    os.makedirs(DSLPath, exist_ok=True)
+    pd.DataFrame(DSL_ARI).to_csv(
+        f'{DSLPath}/{title}.csv', index=False)
+
     # print('run on MinMax')
     # MinMaxARI = MinMax.minmax(data, label, queries=MinMax.queries_cal(
     #     datalen), title=file.split('.')[0])
@@ -101,7 +110,7 @@ if __name__ == "__main__":
     files = ['Segmentation.csv', 'Waveform-5000-C3.csv', 'OptDigits.csv',
              'EEG Eye State.csv', 'Avila.csv', 'Letter Recognition.csv']
 
-    Parallel(n_jobs=3, batch_size=2)(delayed(run)(file) for file in files)
+    Parallel(n_jobs=3)(delayed(run)(file) for file in files)
 
     # for file in os.listdir(dataDir):
     #     title = file.split('.')[0]

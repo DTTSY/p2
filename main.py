@@ -194,8 +194,8 @@ def get_rank_by_layer_(ET: nx.Graph, roots, data: np.array):
         # R.extend([n for n, d in sorted(nn, key=lambda x: x[1], reverse=True)])
     # R[0], R[-1] = R[-1], R[0]
     assert len(R) == len(ET.nodes) - \
-        len(roots), f'{len(R) =} is not equal to {
-            len(ET.nodes) - len(roots)=}, {len(roots)=} of ET nodes'
+        len(roots), f'{len(R) = } is not equal to {
+            len(ET.nodes) - len(roots) =}, {len(roots) = } of ET nodes'
     print(f'{len(R)=}')
     # R.reverse()
     # R.remove(roots[0])
@@ -442,7 +442,7 @@ def draw_graph(ARIpath: str, pathToSavePic: str = 'result/pic', file='', remove=
 
 def draw_graph_e(ARIpath: str, pathToSavePic: str = 'result/pic', file='', remove=False, matric='ARI'):
     print('save result to pic')
-    algpath = ['OUR', 'ADP', 'ADPE', 'COBRAS']
+    algpath = ['middle', 'ADP', 'ADPE', 'COBRAS']
     # path = [f'{ARIpath}/{i}' for i in algpath]
     os.makedirs(pathToSavePic, exist_ok=True)
 
@@ -1027,8 +1027,8 @@ def refine_by_h_1(ET: nx.Graph, roots: list, data, real_labels):
             l.append(fus)
             fus = next(FUS_g, stopMarker)
 
-        assert len(f)+len(l) <= upb, f'{len(f)=}, {len(l)=}, {
-            len(f)+len(l)=}, {upb=}'
+        assert len(f)+len(l) <= upb, f'{len(f) =}, {len(l) = }, {
+            len(f)+len(l) =}, {upb = }'
         Rank = f+l
 
         for n in Rank:
@@ -1238,8 +1238,8 @@ def get_candidate_nodes(windowSize, FUS_g, flayer_g, stopMarker):
         l.append(fus)
         fus = next(FUS_g, stopMarker)
 
-    assert len(f)+len(l) <= upb, f'{len(f)=}, {len(l)=}, {
-        len(f)+len(l)=}, {upb=}'
+    assert len(f)+len(l) <= upb, f'{len(f) =}, {len(l) = }, {
+        len(f)+len(l) =}, {upb = }'
 
     Rank = f+l
     return Rank
@@ -1578,7 +1578,7 @@ def run_PRSC(data, real_labels, K, num_thread):
     print(f'roots affter merge: {roots=}')
     assert len(roots) == 1, f'{roots=}'
     assert len([ET.subgraph(c) for c in nx.weakly_connected_components(ET)]) == 1, f'{
-        len([ET.subgraph(c) for c in nx.weakly_connected_components(ET)])=}'
+        len([ET.subgraph(c) for c in nx.weakly_connected_components(ET)]) =}'
     nods = list(ET.nodes)
     assert len(real_labels) == len(nods), f'{len(real_labels)=}, {len(nods)=}'
     # 检查nodes里面的数是否连续
@@ -1588,8 +1588,8 @@ def run_PRSC(data, real_labels, K, num_thread):
     p2: np.ndarray = np.zeros(len(real_labels), dtype=int)
     ari = adjusted_rand_score(real_labels, p1)
     ari2 = adjusted_rand_score(real_labels, p2)
-    assert ari == ari2, f'{ari=}, {ari2=}, {len(nods)=}, {len(real_labels)=},{
-        np.all(p1 == p2)}, {len(roots)=}, len connected_components: {len([ET.subgraph(c) for c in nx.weakly_connected_components(ET)])}'
+    assert ari == ari2, f'{ari = }, {ari2 = }, {len(nods) = }, {len(real_labels) = }, {
+        np.all(p1 == p2)}, {len(roots) =}, len connected_components: {len([ET.subgraph(c) for c in nx.weakly_connected_components(ET)])}'
     # 判断两个数组是否相等
     assert np.all(p1 == p2), f'p1 is not equal to p2'
     # 查看ET有几个联通分量
@@ -2017,11 +2017,12 @@ if __name__ == '__main__':
 
     files: list[str] = os.listdir(arg['dataDir'])
     #  使用进程池
-    Parallel(n_jobs=6)(delayed(runp_h)(arg['dataDir'], file,
-                                       arg['resultDir']) for file in files
-                       if file.endswith('.csv'))
+    # Parallel(n_jobs=6)(delayed(runp_h)(arg['dataDir'], file,
+    #                                    arg['resultDir']) for file in files
+    #                    if file.endswith('.csv'))
 
     files: list[str] = os.listdir(arg['resultDir'])
-    Parallel(n_jobs=6)(delayed(draw_graph_e)(ARIpath='result', pathToSavePic=arg['pathToSavePic'],
+    PathToSaveFig = 'result/pic/t'
+    Parallel(n_jobs=6)(delayed(draw_graph_e)(ARIpath='result', pathToSavePic=PathToSaveFig,
                                              file=file) for file in files
                        if file.endswith('.csv'))

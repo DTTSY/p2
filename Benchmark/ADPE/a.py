@@ -396,7 +396,7 @@ def dynamic_selection(real_labels, candidates, neighbors, x, count):
 
 def ADPE(data, labels, xi, alpha, s, l, theta, q=1000):
     # 保存结果的变量:
-    ARI_record = []
+    # ARI_record = []
     ARI_record = {"iter": [], "interaction": [], "ari": []}
     ARI = adjusted_rand_score(labels, [0] * len(data))
     interaction = 0
@@ -455,7 +455,7 @@ def ADPE(data, labels, xi, alpha, s, l, theta, q=1000):
     ARI_record["ari"].append(ARI)
 
     # ARI_record.append([{"iter": iter, "interaction": count, "ari": ARI}])
-    while (True) or count < q:
+    while count <= q:
         # step3 1.计算总的uncertainty
         overall_uncertainty = uncertainty_cal(
             predicted_labels, subspaces, result_dicts, nearest_neighbors, s)
@@ -490,6 +490,7 @@ def ADPE(data, labels, xi, alpha, s, l, theta, q=1000):
 
 
 if __name__ == '__main__':
+    raise Exception("This file is not meant to be executed")
     # 数据集load
     data, labels = generate_sonar_data(
         path="../f_datasets/small/sonar/sonar.data")

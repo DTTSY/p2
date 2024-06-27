@@ -1,5 +1,5 @@
 import sys
-
+import os
 import numpy as np
 import pandas as pd
 from sklearn.metrics import adjusted_rand_score
@@ -19,7 +19,7 @@ def data_preprocess(data):
 
 
 def experiemnt_adp(data, real_labels, alpha, l, theta, q=1000):
-    ARI_record = []
+    # ARI_record = []
     ARI_record = {"iter": [], "interaction": [], "ari": []}
     ARI = adjusted_rand_score(real_labels, [0] * len(data))
     interaction = 0
@@ -37,7 +37,7 @@ def experiemnt_adp(data, real_labels, alpha, l, theta, q=1000):
     neighbors, count = static_selection(P, real_labels)
     predict_labels, result_dict = neighbors_labeling(
         ascription_tree, neighbors)
-    while (True) or count < q:
+    while count <= q:
         a = uncertainty_selection(
             predict_labels, data, neighbors, result_dict, nearest_neighbors)
         if a == None:
@@ -56,6 +56,8 @@ def experiemnt_adp(data, real_labels, alpha, l, theta, q=1000):
         ARI_record["iter"].append(iter)
         ARI_record["interaction"].append(count)
         ARI_record["ari"].append(ARI)
+        # if count % 100 == 0:
+        #     print(f'{os.getpid()}\t {count}')
         if ARI == 1:
             break
         # ARI_record.append([{"iter": iter, "interaction": count, "ari": ARI}])
@@ -81,6 +83,8 @@ def result_to_csv(ARI_record, title):
 
 
 if __name__ == '__main__':
+    raise Exception(
+        "This script is not meant to be run directly. Run the benchmark script instead.")
     alpha = 0.22
     l = 5
     theta = 0.00001
