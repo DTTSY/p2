@@ -1,0 +1,18 @@
+metadata_version: 1
+name: 'WECR kmeans: An Adaptive Robust Semi-supervised Clustering Framework Using
+  Weighted Consensus of Random k-Means Ensemble'
+description: |-
+  An Adaptive Robust Semi-supervised Clustering
+  Framework Using Weighted Consensus of
+  Random k-Means Ensemble
+tags:
+- TKDE
+- weighted-ensemble-clustering
+authors:
+- name: Yongxuan Lai    Xiamen University,China
+- name: Songyao He
+- name: Zhijie Lin
+- name: Fan Yang
+- name: Qifeng Zhou
+- name: Xiaofang Zhou
+corresponding_contributor: {}

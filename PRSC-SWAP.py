@@ -64,8 +64,8 @@ class PRS():
 
     def get_clusters(self, num_thread, threshold_clusters):
         # print('50', threshold_clusters)
-        sub_data = self.divide_data_random(num_thread)
-        # sub_data = self.divide_data_kmeans(num_thread)
+        # sub_data = self.divide_data_random(num_thread)
+        sub_data = self.divide_data_kmeans(num_thread)
         bns_ = []
         no_bns = math.log(self.data.shape[0])
         for i in range(len(sub_data)):

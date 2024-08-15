@@ -3,5 +3,6 @@
 *.PNG
 *.XLSX
 *.TXT
+*.ZIP
 data
 __pycache__

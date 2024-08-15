@@ -11,19 +11,23 @@ import networkx as nx
 import pandas as pd
 from sklearn.metrics import adjusted_rand_score, rand_score, normalized_mutual_info_score
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
+import scienceplots
+
 import numpy as np
 from sklearn.semi_supervised import LabelPropagation, LabelSpreading
 from joblib import Parallel, delayed
 from sklearn.decomposition import PCA
 from networkx.drawing.nx_pydot import graphviz_layout
-from active_semi_clustering import COPKMeans, MPCKMeans, PCKMeans
+# from active_semi_clustering import COPKMeans, MPCKMeans, PCKMeans
 from icecream import ic
 
 from DSL.DSLm import clustering, iteration_once
 from myutil import DataLoader
 from myutil.retry import retry
 from PRSCSWAP import PRS
+
+# plt.style.use(['science', 'ieee'])
 
 
 class Neiborhood():
@@ -139,8 +143,8 @@ def DSL(data, real_labels, title, skeleton=None, representatives=None, K=2, u_ra
         # print(skeleton.nodes(data=True))
         if suspend == True:
             # assert i > len(real_labels)
-            print(f"The algorithm is down at loop{
-                  i} len data{len(real_labels)}")
+            print(
+                f"The algorithm is down at loop{i} len data{len(real_labels)}")
             break
 
         predict_labels = skeleton_process(skeleton)
@@ -154,8 +158,8 @@ def DSL(data, real_labels, title, skeleton=None, representatives=None, K=2, u_ra
 
         if ARI == 1:
             break
-    print(f"the representatives of {title} is {representatives} and k is {
-          len(representatives) == len(np.unique(real_labels))}")
+    # print(
+    #     f"the representatives of {title} is {representatives} and k is {len(representatives) == len(np.unique(real_labels))}")
     return pd.DataFrame(df), representatives
 
 
@@ -194,8 +198,7 @@ def get_rank_by_layer_(ET: nx.Graph, roots, data: np.array):
         # R.extend([n for n, d in sorted(nn, key=lambda x: x[1], reverse=True)])
     # R[0], R[-1] = R[-1], R[0]
     assert len(R) == len(ET.nodes) - \
-        len(roots), f'{len(R) = } is not equal to {
-            len(ET.nodes) - len(roots) =}, {len(roots) = } of ET nodes'
+        len(roots), f'{len(R) = } is not equal to {len(ET.nodes) - len(roots) =}, {len(roots) = } of ET nodes'
     print(f'{len(R)=}')
     # R.reverse()
     # R.remove(roots[0])
@@ -262,7 +265,16 @@ def get_auic(path: str):
 
 def draw_graph_w(ET: nx.Graph, data: np.array, roots: list, title: str, real_labels=None):
     # pos = nx.spring_layout(ET)
+    # pos = nx.nx_agraph.graphviz_layout(ET)
     pos = nx.nx_agraph.graphviz_layout(ET, prog="dot")
+    # pos = nx.nx_agraph.graphviz_layout(ET, prog="twopi")
+    # pos = nx.nx_agraph.graphviz_layout(ET, prog="fdp")
+    # pos = nx.nx_agraph.graphviz_layout(ET, prog="sfdp")
+    # pos = nx.nx_agraph.graphviz_layout(ET, prog="circo")
+    # pos = nx.nx_agraph.graphviz_layout(ET, prog="nop")
+    # pos = nx.nx_agraph.graphviz_layout(ET, prog="nop2")
+    # pos = nx.nx_agraph.graphviz_layout(ET, prog="osage")
+
     # pos = graphviz_layout(ET, prog="twopi")
     # pos = nx.kamada_kawai_layout(ET)
     # pos = nx.spectral_layout(ET)
@@ -272,9 +284,10 @@ def draw_graph_w(ET: nx.Graph, data: np.array, roots: list, title: str, real_lab
     # pos = nx.random_layout(ET)
     # pos = nx.fruchterman_reingold_layout(ET)
     # pos = nx.bipartite_layout(ET, roots)
-
+    plt.figure(figsize=(15, 10))
     nx.draw(ET, pos, with_labels=True)
     realcluster: dict[int, list] = {}
+
     for i, l in enumerate(real_labels):
         if l not in realcluster:
             realcluster[l] = []
@@ -289,7 +302,8 @@ def draw_graph_w(ET: nx.Graph, data: np.array, roots: list, title: str, real_lab
     # nx.draw_networkx_nodes(ET, pos, nodelist=roots, node_color='r')
     plt.title(title)
     # plt.savefig(f'result/p2/graph/{title}.pdf')
-    plt.show()
+    # plt.show()
+    plt.savefig(f'result/tree/{title}.png')
 
 # plot scatter for data and label
 
@@ -442,26 +456,41 @@ def draw_graph(ARIpath: str, pathToSavePic: str = 'result/pic', file='', remove=
 
 def draw_graph_e(ARIpath: str, pathToSavePic: str = 'result/pic', file='', remove=False, matric='ARI'):
     print('save result to pic')
-    algpath = ['middle', 'ADP', 'ADPE', 'COBRAS']
+    # import scienceplots
+    # plt.style.use(['science'])
+    # algpath = ['OUR-kmeans-100', 'DSL', 'ADP', 'ADPE', 'COBRAS']
+
+    # algpath = ['Ablation/OUR-9-t100', 'ADP', 'ADPE', 'COBRAS']
+    algpath = os.listdir('result/Ablation')
+    algpath = [f'Ablation/{i}' for i in algpath]
+    # algpath = [f'OUR-{i*100}' for i in range(0, 6)]
+    # algpath = [f'OUR-kmeans-{i*100}' for i in range(0, 6)]
+    # algpath = ['OUR-0'] + ['OUR-100']
     # path = [f'{ARIpath}/{i}' for i in algpath]
     os.makedirs(pathToSavePic, exist_ok=True)
 
+    # plt.style.use(['science', 'ieee'])
+    # with plt.style.context(['science', 'ieee']):
+    # plt.figure(figsize=(10, 6))
     fig, ax = plt.subplots()
     for i in algpath:
         fpath = f'{ARIpath}/{i}/{file}'
+        print(f'load {fpath}')
         if not os.path.exists(fpath):
             continue
+        print(f'load {fpath}')
         ARI = pd.read_csv(fpath)
         ax.plot(ARI['interaction'], ARI['ari'], label=i)
 
-    ax.set_xlabel('Quries')
+    ax.set_xlabel('Quries scale log')
     ax.set_ylabel(matric)
     ax.set_title(f'{file.split(".")[0]}')
+    ax.set_xscale('log')
     ax.legend()
 
     path = f'{pathToSavePic}/{file.split(".")[0]}.png'
     # print(f'save  to {path}')
-    plt.savefig(path, dpi=600)
+    fig.savefig(path, dpi=600)
 
 
 def run(dataDir: str = "data", uncertainty=False) -> None:
@@ -479,8 +508,8 @@ def run(dataDir: str = "data", uncertainty=False) -> None:
         info['Samples'].append(len(real_labels))
         info['Features'].append(rdata.shape[1])
 
-        print(f'run on {file} of size {len(real_labels)} and k={
-              np.unique(real_labels).shape[0]}')
+        print(
+            f'run on {file} of size {len(real_labels)} and k={np.unique(real_labels).shape[0]}')
         theta = 1
         data = rdata.copy()
         data = (data - data.mean()) / (data.std())
@@ -1027,8 +1056,8 @@ def refine_by_h_1(ET: nx.Graph, roots: list, data, real_labels):
             l.append(fus)
             fus = next(FUS_g, stopMarker)
 
-        assert len(f)+len(l) <= upb, f'{len(f) =}, {len(l) = }, {
-            len(f)+len(l) =}, {upb = }'
+        assert len(f)+len(l) <= upb, f'{len(f) = }, {len(l) = }, {
+            len(f)+len(l) = }, {upb = }'
         Rank = f+l
 
         for n in Rank:
@@ -1238,8 +1267,8 @@ def get_candidate_nodes(windowSize, FUS_g, flayer_g, stopMarker):
         l.append(fus)
         fus = next(FUS_g, stopMarker)
 
-    assert len(f)+len(l) <= upb, f'{len(f) =}, {len(l) = }, {
-        len(f)+len(l) =}, {upb = }'
+    assert len(f)+len(l) <= upb, f'{len(f) = }, {len(l) = }, {
+        len(f)+len(l) = }, {upb = }'
 
     Rank = f+l
     return Rank
@@ -1309,10 +1338,11 @@ def get_N_neighbors_distance(G: nx.Graph, data, nodes, N=1):
     return Rank
 
 
-def refine_by_h_3(ET: nx.Graph, roots: list, data, real_labels, subroots: list):
+def refine_by_h_3(ET: nx.Graph, roots: list, data, real_labels, subroots: list, dataName: str = 'nan'):
     '''
     1. 从根节点开始，按照层次遍历的顺序，依次判断每个节点
     '''
+    linkCounts = [0, 0]
     ARI = adjusted_rand_score(real_labels, get_predict_labels(ET))
     df: dict[int, list] = {"iter": [0],
                            "interaction": [0], "ari": [ARI], "time": [0]}
@@ -1326,7 +1356,7 @@ def refine_by_h_3(ET: nx.Graph, roots: list, data, real_labels, subroots: list):
     T: nx.Graph = nx.reverse(ET)
     R: list = roots.copy()
 
-    print(f'start refine_by_h ')
+    print(f'start refine_by_h3 ')
     print(f'{len(ET.edges)=}, {len(ET.nodes)=}')
     # att = get_node_attrs_by_distance_from_root(ET, data, roots)
     att = get_node_attrs_by_distance_from_root(ET, data, roots)
@@ -1380,6 +1410,12 @@ def refine_by_h_3(ET: nx.Graph, roots: list, data, real_labels, subroots: list):
     # Rank = flayer+FUS
     # Rank = list(ET.nodes)
 
+    _maxdis = 0
+    _maxdig = 0
+    for e in ET.edges():
+        _maxdis = max(_maxdis, np.linalg.norm(data[e[0]]-data[e[1]]))
+        _maxdig = max(_maxdig, ET.in_degree(e[0])+ET.in_degree(e[1]))
+
     # init
     RankQ = queue.PriorityQueue()
 
@@ -1387,14 +1423,20 @@ def refine_by_h_3(ET: nx.Graph, roots: list, data, real_labels, subroots: list):
         e = list(ET.neighbors(n))
         # assert len(e) == 1, f'{n=} has {len(e)} neighbors'
         if e:
-            RankQ.put(Node(n, np.linalg.norm(data[n]-data[e[0]])))
+            # t1
+            # RankQ.put(Node(n, np.linalg.norm(data[n]-data[e[0]])))
+            # t2
+            dist = np.linalg.norm(data[n]-data[e[0]])
+            dig = ET.in_degree(n)+ET.in_degree(e[0])
+            RankQ.put(Node(n, dist/_maxdis+dig/_maxdig))
 
     if not Rank:
         print(f'all candidate nodes have been visited')
         return pd.DataFrame(df), R
     q = 1000
-
-    while not RankQ.empty() and c < q:
+    ll = 0
+    # while not RankQ.empty() and c < q:
+    while not RankQ.empty():
         nn = RankQ.get(block=False)
         n = nn.id
         if n in visited:
@@ -1402,7 +1444,12 @@ def refine_by_h_3(ET: nx.Graph, roots: list, data, real_labels, subroots: list):
         # _ET: nx.Graph = nx.reverse(ET)
         nbors = list(T.neighbors(n))
         for nb in nbors:
-            RankQ.put(Node(nb, np.linalg.norm(data[nb]-data[n])))
+            # t1
+            # RankQ.put(Node(nb, np.linalg.norm(data[nb]-data[n])))
+            # t2
+            dist = np.linalg.norm(data[n]-data[nb])
+            dig = ET.in_degree(n) + ET.in_degree(nb)
+            RankQ.put(Node(nb, dist/_maxdis + dig/_maxdig))
 
         s = time.perf_counter()
         count = 0
@@ -1414,6 +1461,8 @@ def refine_by_h_3(ET: nx.Graph, roots: list, data, real_labels, subroots: list):
             visited.add(a)
 
             count += 1
+            ll += 1
+            linkCounts[int(real_labels[a] == real_labels[b])] += 1
             if real_labels[a] != real_labels[b]:
                 count += refine_dislike(ET, data,
                                         real_labels, R, e, att)
@@ -1429,6 +1478,7 @@ def refine_by_h_3(ET: nx.Graph, roots: list, data, real_labels, subroots: list):
         predict_labels = get_predict_labels(ET)
 
         ARI = adjusted_rand_score(real_labels, predict_labels)
+        # ARI = rand_score(real_labels, predict_labels)
         t = time.perf_counter()
         # RI = rand_score(real_labels, predict_labels)
 
@@ -1443,8 +1493,119 @@ def refine_by_h_3(ET: nx.Graph, roots: list, data, real_labels, subroots: list):
 
         if ARI == 1:
             print(f'find the best result at {i} iteration')
-            return pd.DataFrame(df), R
+            break
+    linkCountsP = 'result/other/'
+    os.makedirs(linkCountsP, exist_ok=True)
+    l = np.array(linkCounts)
+    np.savetxt(f'{linkCountsP}{dataName}_linkCounts.csv',
+               l, delimiter=',', fmt='%d')
+    print(f'finash')
 
+    return pd.DataFrame(df), R
+
+
+def edge_first_order_neighbors(G: nx.DiGraph, isNormalized=False):
+    edge_neighbors_count: dict = {}
+    _max = 1
+    for u, v in G.edges():
+        # 找到连接到u或v的所有边
+        le = G.in_degree(u) * G.in_degree(v)
+        _max = max(_max, le)
+        edge_neighbors_count[(u, v)] = le
+    if isNormalized:
+        for k in edge_neighbors_count:
+            edge_neighbors_count[k] /= _max
+            # u, v = k
+            # edge_neighbors_count[k] /= G.in_degree(u) + G.in_degree(v)
+    return edge_neighbors_count, _max
+
+
+def refine_by_h_4(ET: nx.Graph, roots: list, data, real_labels, subroots: list, dataName: str = 'nan'):
+    '''
+    1. 计算边的度数
+    '''
+    print(f'start refine_by_h 4')
+    s = time.perf_counter()
+    # att = get_node_attrs_by_distance_from_root(ET, data, roots)
+    R: list = roots.copy()
+    linkCounts = [0, 0]
+    ARI = adjusted_rand_score(real_labels, get_predict_labels(ET))
+    df: dict[int, list] = {"iter": [0],
+                           "interaction": [0], "ari": [ARI], "time": [0]}
+
+    edge_neighbors_count, _max = edge_first_order_neighbors(
+        ET, isNormalized=True)
+    _maxDist = 0
+    print(f'edge_first_order_neighbors max: {_max}')
+    _md = 0
+    for edge in edge_neighbors_count.keys():
+        u, v = edge
+        _md = max(_md, edge_neighbors_count[edge])
+        _maxDist = max(_maxDist, np.linalg.norm(data[u]-data[v]))
+    print(f'edge_neighbors_count {_md}')
+
+    # I2
+    # for edge in edge_neighbors_count.keys():
+    #     u, v = edge
+    #     dist = np.linalg.norm(data[u]-data[v])
+    #     edge_neighbors_count[edge] = edge_neighbors_count[edge]+(dist/_maxDist)
+
+    # I1
+    for edge in edge_neighbors_count.keys():
+        u, v = edge
+        dist = np.linalg.norm(data[u]-data[v])
+        edge_neighbors_count[edge] = dist
+
+    sorted_edge_neighbors_count = sorted(
+        edge_neighbors_count.items(), key=lambda x: x[1], reverse=True)
+    c, i = 0, 0
+
+    for edge, cc in sorted_edge_neighbors_count:
+        # print(f'{edge=}, {count=},{_max=}')
+        u, v = edge
+        e = edge
+        if ET.has_edge(u, v):
+            e = edge
+        elif ET.has_edge(v, u):
+            e = (v, u)
+        else:
+            continue
+        a, b = e
+        count = 1
+
+        linkCounts[int(real_labels[a] == real_labels[b])] += 1
+        if real_labels[a] != real_labels[b]:
+            count += refine_dislike(ET, data,
+                                    real_labels, R, [e], None)
+
+    #     # ARI = df['ari'][-1]
+    #     # if True or i % 2 == 0:
+        predict_labels = get_predict_labels(ET)
+
+        ARI = adjusted_rand_score(real_labels, predict_labels)
+    #     # ARI = rand_score(real_labels, predict_labels)
+        t = time.perf_counter()
+    #     # RI = rand_score(real_labels, predict_labels)
+
+        c += count
+        i += 1
+
+        df['iter'].append(i)
+        df['interaction'].append(c)
+    #     # df['ari'].append(RI)
+        df['ari'].append(ARI)
+        df['time'].append(t-s)
+
+        if ARI == 1:
+            print(f'find the best result at {i} iteration')
+            break
+
+    linkCountsP = 'result/other/'
+    os.makedirs(linkCountsP, exist_ok=True)
+    l = np.array(linkCounts)
+    np.savetxt(f'{linkCountsP}{dataName}_linkCounts.csv',
+               l, delimiter=',', fmt='%d')
+    print(f'finash')
     return pd.DataFrame(df), R
 
 
@@ -1455,7 +1616,7 @@ def refine_dislike(ET: nx.Graph, data, real_labels, R: list, e, att):
     Find = False
     rl = [[r, np.linalg.norm(data[n]-data[r])] for r in R]
     rl = [r for r, _ in sorted(rl, key=lambda x: x[1])]
-    count = 0
+    count: int = 0
     for r in rl:
         count += 1
         if real_labels[n] == real_labels[r]:
@@ -1562,13 +1723,13 @@ def merge_roots(ET: nx.Graph, roots: list):
     return merge_roots(ET, roots)
 
 
-@retry(retries=6, delay=0)
+@retry(retries=3, delay=0)
 def run_PRSC(data, real_labels, K, num_thread):
     start = time.time()
     prs = PRS(data)
     threshold_clusters = K
     threshold_clusters = 2
-    prs.get_clusters(num_thread, threshold_clusters)
+    prs.get_clusters(num_thread, threshold_clusters, divide_method='PRSC')
     # print(prs.boundary_nodes)
     ET, roots = prs.get_final_tree_nx()
     subroots = prs.get_subroots()
@@ -1598,14 +1759,14 @@ def run_PRSC(data, real_labels, K, num_thread):
     return ET, roots, subroots
 
 
-def runp_h(dataDir, file: str, outdir: str = 'result/p2/small') -> None:
+def runp_h(dataDir, file: str, outdir: str = 'result/p2/small', tht=1) -> None:
     assert os.path.exists(dataDir)
 
     ari21 = {'dataset': [], 'ari': [], 'interaction': []}
     info = {'Dataset': [], 'Samples': [], 'Features': [], 'Class': [], }
 
-    rdata, real_labels, K = DataLoader.get_data_from_local(
-        f'{dataDir}/{file}', doPerturb=True)
+    rdata, real_labels, K, _ = DataLoader.get_data_from_local(
+        f'{dataDir}/{file}', doPerturb=False)
 
     # if len(real_labels) < 1e3:
     #     return
@@ -1616,15 +1777,32 @@ def runp_h(dataDir, file: str, outdir: str = 'result/p2/small') -> None:
 
     print(f'run on {file} of size {len(real_labels)} and k={
         np.unique(real_labels).shape[0]}')
-    theta = 1
+    theta = tht
     data = rdata.copy()
-    data = (data - data.mean()) / (data.std())
+    assert data.isnull().sum().sum() == 0, f'{data.isnull().sum().sum() =}'
+    data = StandardScaler().fit_transform(data)
+    data = pd.DataFrame(data)
+    # data = (data - data.mean()) / (data.std())
+
+    assert data.isnull().sum().sum() == 0, f'data after normal: {
+        data.isnull().sum().sum() =}'
     # data = MinMaxScaler().fit_transform(data)
     # data = pd.DataFrame(data)
+    num_thread = 1
 
-    num_thread = math.ceil(math.ceil(len(real_labels) / (theta * 100)))
+    if theta == 0:
+        num_thread = 1
+    elif theta == -1:
+        num_thread = math.ceil(np.log10(len(real_labels)))
+    else:
+        num_thread = math.ceil(math.ceil(len(real_labels) / (theta * 100)))
 
-    ET, roots, subroots = run_PRSC(data, real_labels, K, num_thread)
+    # num_thread = math.ceil(np.log10(len(real_labels)))
+    print(f'runp_h: the missing value in data is {
+        data.isnull().sum().sum()}')
+    # origin
+    # ET, roots, subroots = run_PRSC(data, real_labels, K, theta*100)
+    ET, roots, subroots = run_PRSC(data, real_labels, K, tht)
 
     # neighbors = NearestNeighbors(n_neighbors=2).fit(data)
     # distance, nearest_neighbors = neighbors.kneighbors(
@@ -1649,8 +1827,13 @@ def runp_h(dataDir, file: str, outdir: str = 'result/p2/small') -> None:
     # ARI_record, R = refine_by_h_1(ET, roots, data, real_labels)
 
     # ARI_record, R = refine_by_h_2(ET, roots, data, real_labels, subroots)
-    ARI_record, R = refine_by_h_3(ET, roots, data, real_labels, subroots)
+    ARI_record, R = refine_by_h_3(
+        ET, roots, data, real_labels, subroots, dataName=file.split(".")[0])
     print(f'{R=}, {len(R) == K}')
+
+    # ARI_record, R = refine_by_h_4(
+    #     ET, roots, data, real_labels, subroots, dataName=file.split(".")[0])
+    # print(f'{R=}, {len(R) == K}')
 
     # draw_graph_w(ET, data, R, title=file.split(
     #     ".")[0], real_labels=real_labels)
@@ -1658,7 +1841,7 @@ def runp_h(dataDir, file: str, outdir: str = 'result/p2/small') -> None:
     # ARI_record, _ = DSL(data, real_labels, title=file.split(".")[
     #     0], skeleton=ET, representatives=roots, K=K)
 
-    # os.makedirs(outdir, exist_ok=True)
+    os.makedirs(outdir, exist_ok=True)
     ARI_record.to_csv(
         f'{outdir}/{file.split(".")[0]}.csv', index=False)
 
@@ -1973,13 +2156,13 @@ def refine_cluster_COPKmeans(ET, data, lable, k, N, roots, cnum=20):
 
 def set_run_arg(task: str):
     arg: dict = {'dataDir': 'G:/data/datasets/UCI/small/data',
-                 'resultDir': 'result/small',
-                 'pathToSavePic': 'result/pic/small'}
+                 'resultDir': 'result/small/OUR-9-t100',
+                 'pathToSavePic': 'result/pic/small/log'}
     if task == 'small':
         return arg
     elif task == 'middle':
-        arg['dataDir'] = 'G:/data/datasets/UCI/middle/data'
-        arg['resultDir'] = 'result/OUR'
+        arg['dataDir'] = 'G:/data/datasets/UCI/middle1/data'
+        arg['resultDir'] = 'result/Ablation/OUR-9-t100'
         arg['pathToSavePic'] = 'result/pic/middle'
     elif task == 'large':
         arg['dataDir'] = 'G:/data/datasets/UCI/large/data'
@@ -2016,13 +2199,23 @@ if __name__ == '__main__':
     batch_size = max(1, (jobs + n_jobs-1) // n_jobs)
 
     files: list[str] = os.listdir(arg['dataDir'])
+    # files = ['Segmentation.csv']
     #  使用进程池
-    # Parallel(n_jobs=6)(delayed(runp_h)(arg['dataDir'], file,
-    #                                    arg['resultDir']) for file in files
-    #                    if file.endswith('.csv'))
+    # theta = [i for i in range(0, 6)]
+    # for i in theta:
+    #     resultDir = f'result/OUR-kmeans-{i*100}'
+    #     os.makedirs(resultDir, exist_ok=True)
 
-    files: list[str] = os.listdir(arg['resultDir'])
-    PathToSaveFig = 'result/pic/t'
+    #     Parallel(n_jobs=6)(delayed(runp_h)(arg['dataDir'], file,
+    #                                        resultDir, tht=i) for file in files
+    #                        if file.endswith('.csv'))
+
+    Parallel(n_jobs=6)(delayed(runp_h)(arg['dataDir'], file,
+                                       arg['resultDir'], tht=1) for file in files
+                       if file.endswith('.csv'))
+
+    PathToSaveFig = 'result/pic/bestLog2A'
+    os.makedirs(PathToSaveFig, exist_ok=True)
     Parallel(n_jobs=6)(delayed(draw_graph_e)(ARIpath='result', pathToSavePic=PathToSaveFig,
                                              file=file) for file in files
                        if file.endswith('.csv'))

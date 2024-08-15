@@ -7,29 +7,34 @@ import pandas as pd
 def preprocess_data(dataset_path: str, doPerturb: bool):
     df = pd.read_csv(dataset_path)
     # drop the duplicate rows
-    df.dropna(inplace=True)
     df.drop_duplicates(inplace=True)
+    df.dropna(inplace=True)
     # drop the rows with missing values
     # df.reset_index(inplace=True, drop=True)
 
-    data = df.iloc[:, :-1].values
+    data = df.iloc[:, :-1]
     label = df.iloc[:, -1]
+
     le = LabelEncoder()
     le = le.fit(label)
     label = le.transform(label)
     # data = MinMaxScaler().fit_transform(data)
     # data = StandardScaler().fit_transform(data)
-
     k = le.classes_.shape[0]
 
     if doPerturb:
         random_matrix = np.random.rand(data.shape[0], data.shape[1]) * 1e-7
         data = data + random_matrix
-    data = pd.DataFrame(data)
-    return data, label, k
+    # data = pd.DataFrame(data)
+    _dlabel = pd.DataFrame(label)
+    # _data = pd.DataFrame(data)
+    _data = pd.concat([data, _dlabel], axis=1)
+    # 统计data中的缺失值
+    # print(f'{dataset_path.split('/')[-1]}: 缺失值个数：{data.isnull().sum().sum()}')
+    return data, label, k, _data
 
 
-def get_data_from_local(dataset_path: str, doPerturb: bool = True):
+def get_data_from_local(dataset_path: str, doPerturb: bool = False):
     return preprocess_data(dataset_path, doPerturb)
 
 

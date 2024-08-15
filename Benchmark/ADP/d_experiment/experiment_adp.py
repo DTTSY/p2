@@ -18,7 +18,7 @@ def data_preprocess(data):
     return data
 
 
-def experiemnt_adp(data, real_labels, alpha, l, theta, q=1000):
+def experiemnt_adp(data, real_labels, alpha, l, theta, q=1000, title="none"):
     # ARI_record = []
     ARI_record = {"iter": [], "interaction": [], "ari": []}
     ARI = adjusted_rand_score(real_labels, [0] * len(data))
@@ -56,8 +56,11 @@ def experiemnt_adp(data, real_labels, alpha, l, theta, q=1000):
         ARI_record["iter"].append(iter)
         ARI_record["interaction"].append(count)
         ARI_record["ari"].append(ARI)
-        # if count % 100 == 0:
-        #     print(f'{os.getpid()}\t {count}')
+        if count % 100 == 0:
+            print(f'{os.getpid()}\t {count}')
+            ADPPath = 'result/ADP'
+            pd.DataFrame(ARI_record).to_csv(
+                f'{ADPPath}/{title}.csv', index=False)
         if ARI == 1:
             break
         # ARI_record.append([{"iter": iter, "interaction": count, "ari": ARI}])

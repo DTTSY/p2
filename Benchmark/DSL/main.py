@@ -3,7 +3,7 @@ from scipy.spatial import distance
 from networkx import shortest_path
 from matplotlib import pyplot as plt
 import time
-
+import os
 import networkx as nx
 import pandas as pd
 
@@ -15,6 +15,8 @@ import networkx as nx
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 np.random.seed(0)
+
+# Ccount = 0
 
 
 def draw_contraint_graph(constraint_G):
@@ -94,15 +96,18 @@ def constraint_judgement(G, pairwise):
     return result
 
 
-def judgement(anomaly, constraint_graph, real_labels):
+def judgement(anomaly, constraint_graph, real_labels, cinfo: dict = None):
     pairwise = [int(anomaly[0]), int(anomaly[1])]
     result = constraint_judgement(constraint_graph, pairwise)
+    # result = "unknown"
     if result == "unknown":
         constraint_graph, result = human_judgement(
             pairwise, real_labels, constraint_graph)
         judgement_type = "human"
+        cinfo['human'][0] += 1
     else:
         judgement_type = "constraint"
+        cinfo['c'][0] += 1
     return constraint_graph, result, judgement_type
 
 
@@ -122,13 +127,13 @@ def connections_cal(edge, representatives, data):
     return connections
 
 
-def skeleton_reconstruction_dislike(skeleton, anomaly, representatives, data, real_labels, constraint_graph, count):
+def skeleton_reconstruction_dislike(skeleton, anomaly, representatives, data, real_labels, constraint_graph, count, cinfo: dict = None):
     skeleton.remove_edge(anomaly[0], anomaly[1])
     connections = connections_cal(anomaly, representatives, data)
     find = False
     for connection in connections:
         constraint_graph, result, judgement_type = judgement(
-            connection, constraint_graph, real_labels)
+            connection, constraint_graph, real_labels, cinfo)
         if judgement_type == "human":
             count += 1
         if result == "like":
@@ -177,25 +182,25 @@ def uncertainty_propagation_dislike(skeleton, anomaly, beta):
     return skeleton
 
 
-def skeleton_reconstruction(skeleton, anomaly, representatives, data, real_labels, constraint_graph, count, result):
+def skeleton_reconstruction(skeleton, anomaly, representatives, data, real_labels, constraint_graph, count, result, cinfo: dict = None):
     if result == "like":
         skeleton = skeleton_reconstruction_like(skeleton, anomaly)
     if result == "dislike":
         skeleton, representatives, constraint_graph, count = skeleton_reconstruction_dislike(
-            skeleton, anomaly, representatives, data, real_labels, constraint_graph, count)
+            skeleton, anomaly, representatives, data, real_labels, constraint_graph, count, cinfo)
     return skeleton, representatives, constraint_graph, count
 
 
-def iteration_once(skeleton, representatives, data, real_labels, constraint_graph):
+def iteration_once(skeleton, representatives, data, real_labels, constraint_graph, cinfo: dict = None):
     count = 0
     anomaly, suspend = anomaly_detection(skeleton)
     if anomaly != None:
         constraint_graph, result, judgement_type = judgement(
-            anomaly, constraint_graph, real_labels)
+            anomaly, constraint_graph, real_labels, cinfo)
         if judgement_type == "human":
             count += 1
         skeleton, representatives, constraint_graph, count = skeleton_reconstruction(
-            skeleton, anomaly, representatives, data, real_labels, constraint_graph, count, result)
+            skeleton, anomaly, representatives, data, real_labels, constraint_graph, count, result, cinfo)
     return skeleton, representatives, constraint_graph, count, suspend
 
 
@@ -321,8 +326,49 @@ def get_predict_labels(Graph: nx.Graph):
     return predict_labels
 
 
-def DSL(data, real_labels, title, q=1000):
-    columns = ["iter", "interaction", "ari", "time"]
+def analyze_relationships(G):
+    from itertools import combinations
+    # 初始化统计变量和存储结构
+    true_count = 0
+    false_count = 0
+    true_relationships = []
+    false_relationships = []
+
+    # 计算所有节点对之间的最短路径并评估其关系
+    relationships = {}
+    for u, v in combinations(G.nodes, 2):
+        try:
+            # 计算最短路径长度和权重总和
+            path = nx.shortest_path(G, source=u, target=v)
+            path_weight_sum = sum(G[path[i]][path[i + 1]]['weight']
+                                  for i in range(len(path) - 1))
+            if path_weight_sum == 0:
+                relationships[(u, v)] = True
+                true_count += 1
+                true_relationships.append((u, v))
+            elif path_weight_sum == 1:
+                relationships[(u, v)] = False
+                false_count += 1
+                false_relationships.append((u, v))
+            else:
+                relationships[(u, v)] = None
+        except nx.NetworkXNoPath:
+            relationships[(u, v)] = None  # 如果没有路径，关系未知
+
+    # 返回统计结果和详细关系列表
+    return true_count, false_count
+
+
+def get_edges_conunt(G: nx.Graph):
+    return len(G.edges)
+
+
+def DSL(data, real_labels, title, q=1000, k=1):
+    human = 0
+    deduction = 0
+    cinfo = {'human': [0], 'c': [0], 'kn': [k*data.shape[0]],
+             'expended': [0], 'eoc': [0]}
+    print(f"Start DSL on {title} {k=}, {data.shape[0]=}")
     df = {"iter": [], "interaction": [], "ari": [], "time": []}
     # df = pd.DataFrame(columns=columns)
 
@@ -344,7 +390,7 @@ def DSL(data, real_labels, title, q=1000):
     # df = df._append(pd.DataFrame(record), ignore_index=True)
     for i in range(loop):
         skeleton, representatives, constraint_graph, count, suspend = iteration_once(skeleton, representatives, data,
-                                                                                     real_labels, constraint_graph)
+                                                                                     real_labels, constraint_graph, cinfo)
         interaction = interaction + count
         if suspend == True:
             print("The algorithm is down")
@@ -360,9 +406,17 @@ def DSL(data, real_labels, title, q=1000):
         df["interaction"].append(interaction)
         df["ari"].append(ARI)
         df["time"].append(duration)
-        if interaction > q:
+        if ARI == 1:
+            t, f = analyze_relationships(constraint_graph)
+            cinfo['expended'][-1] = t+f
+            cinfo['eoc'][-1] = get_edges_conunt(constraint_graph)
             break
+        # if interaction > q:
+        #     break
         # df.to_csv("e_output/%s_result.csv" % title)
+    path = 'result/PRDSL-c2'
+    os.makedirs(path, exist_ok=True)
+    pd.DataFrame(cinfo).to_csv(f"{path}/{title}.csv", index=False)
     return df
 
 

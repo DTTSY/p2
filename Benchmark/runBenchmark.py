@@ -35,17 +35,19 @@ def add_ari21(data, title, ari21):
 
 def run(file: str) -> None:
     title = file.split('.')[0]
-    data, label, k = DataLoader.get_data_from_local(dataDir + '/' + file)
+    data, label, k = DataLoader.get_data_from_local(
+        dataDir + '/' + file)
     data = data.values
 
     datalen = len(data)
-    datalen = 1_000
-    data = (data - data.mean()) / (data.std())
+    datalen = 1_000*len(data)
+    # data = (data - data.mean()) / (data.std())
 
-    print(f'{os.getpid()}\trun on {file}')
+    print(f'{os.getpid()}\t run on {file}')
+
     print(f'run on DSL')
-    DSL_ARI = DSL(data, label, title=title, q=datalen)
-    DSLPath = 'result/DSL'
+    DSL_ARI = DSL(data, label, title=title, q=datalen, k=k)
+    DSLPath = 'result/PRDSL-aexpend'
     os.makedirs(DSLPath, exist_ok=True)
     pd.DataFrame(DSL_ARI).to_csv(
         f'{DSLPath}/{title}.csv', index=False)
@@ -59,46 +61,48 @@ def run(file: str) -> None:
     # ffqsARI = FFQS.ffqs(data, label, queries=FFQS.queries_cal(
     #     datalen), title=title)
     # write_ari21(ffqsARI, f'{title}_FFQS')
-    print('run on ADP')
-    alpha = 0.22
-    l = 5
-    theta = 0.00001
-    ADPARI = experiment_adp.experiemnt_adp(
-        data, label, alpha, l, theta, q=datalen)
-    # os.makedirs('result/ADP', exist_ok=True)
-    ADPPath = 'result/ADP'
-    os.makedirs(ADPPath, exist_ok=True)
-    pd.DataFrame(ADPARI).to_csv(
-        f'{ADPPath}/{title}.csv', index=False)
+
+    # print('run on ADP')
+    # alpha = 0.22
+    # l = 5
+    # theta = 0.00001
+    # ADPARI = experiment_adp.experiemnt_adp(
+    #     data, label, alpha, l, theta, q=datalen, title=title)
+    # # os.makedirs('result/ADP', exist_ok=True)
+    # ADPPath = 'result/ADP'
+    # os.makedirs(ADPPath, exist_ok=True)
+    # pd.DataFrame(ADPARI).to_csv(
+    #     f'{ADPPath}/{title}.csv', index=False)
     # ari21ADP = add_ari21(ADPARI, title, ari21ADP)
 
-    print('run on ADPE')
-    xi = [0.6, 0.8]
-    alpha = [0.15, 0.30]
-    s = 10
-    l = 5
-    theta = 0.00001
-    ADPEARI = ADPE(data, label, xi, alpha, s, l, theta, q=datalen)
-    ADPEPath = 'result/ADPE'
-    os.makedirs(ADPEPath,
-                exist_ok=True)
-    pd.DataFrame(ADPEARI).to_csv(
-        f'{ADPEPath}/{title}.csv', index=False)
+    # print('run on ADPE')
+    # xi = [0.6, 0.8]
+    # alpha = [0.15, 0.30]
+    # s = 10
+    # l = 5
+    # theta = 0.00001
+    # ADPEARI = ADPE(data, label, xi, alpha, s, l, theta, q=datalen)
+
+    # ADPEPath = 'result/ADPE'
+    # os.makedirs(ADPEPath,
+    #             exist_ok=True)
+    # pd.DataFrame(ADPEARI).to_csv(
+    #     f'{ADPEPath}/{title}.csv', index=False)
     # ari21ADPE = add_ari21(ADPEARI, title, ari21ADPE)
     # write_ari21(ADPEARI, f'{title}_ADPE')
 
-    print('run on cobras')
-    COBRASARI = COBRAS(data, label, budget=datalen)
-    # os.makedirs('result/COBRAS', exist_ok=True)
-    COBRASPath = 'result/COBRAS'
-    os.makedirs(COBRASPath, exist_ok=True)
-    pd.DataFrame(COBRASARI).to_csv(
-        f'{COBRASPath}/{title}.csv', index=False)
+    # print('run on cobras')
+    # COBRASARI = COBRAS(data, label, budget=datalen)
+    # # os.makedirs('result/COBRAS', exist_ok=True)
+    # COBRASPath = 'result/COBRAS'
+    # os.makedirs(COBRASPath, exist_ok=True)
+    # pd.DataFrame(COBRASARI).to_csv(
+    #     f'{COBRASPath}/{title}.csv', index=False)
     # ari21COBRAS = add_ari21(COBRASARI, title, ari21COBRAS)
 
 
 if __name__ == "__main__":
-    dataDir = 'G:/data/datasets/UCI/middle/data'
+    dataDir = 'G:/data/datasets/temp/data'
     # data = 'iris.csv'
 
     # for file in [data]:
@@ -107,10 +111,12 @@ if __name__ == "__main__":
     ari21COBRAS = {'dataset': [], 'ari': [], 'interaction': []}
 
     files = os.listdir(dataDir)
-    files = ['Segmentation.csv', 'Waveform-5000-C3.csv', 'OptDigits.csv',
-             'EEG Eye State.csv', 'Avila.csv', 'Letter Recognition.csv']
+    # files = ['Segmentation.csv', 'Waveform-5000-C3.csv', 'OptDigits.csv',
+    #          'EEG Eye State.csv', 'Avila.csv', 'Letter Recognition.csv']
+    # files = ['Letter Recognition.csv', 'Avila.csv']
+    files = ['avila.csv', 'skin.csv', 'EEG.csv', 'letter.csv', 'balance.csv']
 
-    Parallel(n_jobs=3)(delayed(run)(file) for file in files)
+    Parallel(n_jobs=5, batch_size=1)(delayed(run)(file) for file in files)
 
     # for file in os.listdir(dataDir):
     #     title = file.split('.')[0]

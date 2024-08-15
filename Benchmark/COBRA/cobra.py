@@ -245,6 +245,8 @@ def result_to_csv(ARI_record, title):
 
 def experiment(data, real_labels, title):
     # 初始值设为50
+    # end = 25*10+1
+    # for i in range(25,end,25):
     clusterer = COBRA(50)
     clusterings, runtimes, ml, cl, interactions = clusterer.cluster(
         data, real_labels, range(data.shape[0]))

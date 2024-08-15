@@ -7,6 +7,7 @@ from sklearn.metrics import adjusted_rand_score, rand_score, normalized_mutual_i
 # from util.estimate import rand_index
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import KFold
 from matplotlib import pyplot as plt
 from sklearn import cluster as cluster_methods
 from sklearn.neighbors import NearestNeighbors
@@ -17,11 +18,13 @@ import networkx as nx
 import os
 from myutil.retry import retry
 from joblib import Parallel, delayed
+import traceback
+# from main import runPRSC
 
 
 class PRS():
     def __init__(self, data: pd.DataFrame):
-        self.data = data
+        self.data: pd.DataFrame = data
         self.clusters = []
         self.final_tree = {}
         self.nx_graph = nx.DiGraph()
@@ -35,29 +38,77 @@ class PRS():
         return list(self.subroots)
 
     def divide_data_random(self, k):
-        d = self.data.take(np.random.permutation(self.data.shape[0]))
         # d = self.data
+        d = self.data.take(np.random.permutation(self.data.shape[0]))
         split_threshold = int(d.shape[0] / k)
         sub_data = [
             d.iloc[i * split_threshold:(i + 1) * split_threshold, :] for i in range(k - 1)]
         sub_data.append(d.iloc[(k - 1) * split_threshold:, :])
         return sub_data
 
+    def divide_data_random_m(self, k):
+        # devide data radmely into k parts
+        kf = KFold(n_splits=k, shuffle=True, random_state=42)
+        sub_data = []
+        for train_index, test_index in kf.split(self.data):
+            train_df = self.data.iloc[train_index]
+            test_df = self.data.iloc[test_index]
+            sub_data.append(pd.concat([train_df, test_df]))
+
+        return sub_data
+
+    def get_portion_info(self, data: dict):
+        # get the portion of each class
+        x = []
+        y = []
+        for k, v in data.items():
+            x.append(k)
+            y.append(len(v))
+        # 显示y的值
+        bars = plt.bar(x, y)
+        for bar in bars:
+            height = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width() / 2.0, height,
+                     f'{height}', ha='center', va='bottom')
+        plt.show()
+        return
+
     def divide_data_kmeans(self, k):
+        if k == 1:
+            return [self.data]
+        print(f'divide_data_kmeans: the missing value in data is {
+              self.data.isnull().sum().sum()}')
+
         kmeans_model = cluster_methods.KMeans(
-            n_clusters=k, init='random').fit(self.data)
+            n_clusters=k, init='k-means++').fit(self.data)
+
         patition = kmeans_model.labels_
+        print(f'{self.data.shape=}')
+        print(f'{patition.shape=}')
         sub_data = []
         results_map_no = {}
         sup = set(patition)
-        print(sup)
+        print(f'{len(sup)=}')
+
         for s in sup:
             results_map_no[s] = []
+
         for i in range(len(patition)):
             results_map_no[patition[i]].append(i)
+        maxl, maxk = 0, 0
+
+        for k, v in results_map_no.items():
+            maxl = max(maxl, len(v))
+            if maxl == len(v):
+                maxk = k
+
         for s in results_map_no.values():
+            if len(s) <= 1:
+                s.append(results_map_no[maxk].pop())
             sub_data.append(self.data.take(s))
-        print(sub_data)
+
+        print(f'{len(sub_data)=}')
+        # self.get_portion_info(results_map_no)
         return sub_data
 
     def divide_data_results(self, results):
@@ -72,13 +123,31 @@ class PRS():
             sub_data.append(self.data.take(s))
         return sub_data
 
+    def divide_data_PRSC(self, theta):
+
+        ET = run_PRSC(
+            self.data, theta)
+        # ET 是networkx Graph对象，取出ET的联通分量
+        sub_data = []
+        S = [ET.subgraph(c) for c in nx.weakly_connected_components(ET)]
+        for s in S:
+            sub_data.append(self.data.take(s.nodes()))
+        return sub_data
+
     def dist(self, a, b):
         return np.linalg.norm(self.data.values[a] - self.data.values[b])
 
-    def get_clusters(self, num_thread, threshold_clusters):
+    def get_clusters(self, num_thread, threshold_clusters, divide_method='defalut', lables=[]):
         # print('50', threshold_clusters)
-        sub_data = self.divide_data_random(num_thread)
+        if divide_method == 'kmeans':
+            sub_data = self.divide_data_kmeans(num_thread)
+        elif divide_method == 'PRSC':
+            sub_data = self.divide_data_PRSC(1)
+        else:
+            sub_data = self.divide_data_random(num_thread)
+        # sub_data = self.divide_data_random(num_thread)
         # sub_data = self.divide_data_kmeans(num_thread)
+        # sub_data = self.divide_data_PRSC(100, lables)
         bns_ = []
         no_bns = math.log(self.data.shape[0])
         for i in range(len(sub_data)):
@@ -549,7 +618,7 @@ def get_groups(roots, clustering_tree) -> dict:
     return result
 
 
-def get_farthest_node(sources, data, banning):
+def get_farthest_node_c(sources, data, banning):
     max = float('-inf')
     A = sources[0]
     if len(sources) > 1:
@@ -566,11 +635,53 @@ def get_farthest_node(sources, data, banning):
         else:
             BT = np.linalg.norm(data[B] - data[t])
             AB = np.linalg.norm(data[A] - data[B])
+
             if len(sources) == 2:
+                dd = (abs(AT - BT) + AB)
+                if dd == 0:
+                    traceback.print_stack()
+                    # raise ValueError('### dd is zero')
                 d = (AT + BT) / (abs(AT - BT) + AB)
             else:
                 CT = np.linalg.norm(data[C] - data[t])
                 d = (AT + BT + 2 * CT) / (abs(AT - BT) + AB)
+        if d > max:
+            max = d
+            target = t
+    banning.append(target)
+    return target
+
+
+def get_farthest_node(sources, data, banning):
+    max = float('-inf')
+    e = 1e-6
+    A = sources[0]
+    if len(sources) > 1:
+        B = sources[1]
+    if len(sources) == 3:
+        C = sources[2]
+    target = A
+    for t in range(len(data)):
+        if t in banning:
+            continue
+        AT = np.linalg.norm(data[A] - data[t])
+        if len(sources) == 1:
+            d = AT
+        else:
+            BT = np.linalg.norm(data[B] - data[t])
+            AB = np.linalg.norm(data[A] - data[B])
+
+            if len(sources) == 2:
+
+                # dd = (abs(AT - BT) + AB)
+                # if dd == 0:
+                #     print(f'# {os.getpid()}:{
+                #           threading.get_ident()} dd is zero and {A=} {B=} {t=} {AT=:.2f} {BT=:.2f} {AB=:.2f}')
+                #     raise ValueError('### dd is zero')
+                d = (AT + BT) / ((abs(AT - BT) + AB)+e)
+            else:
+                CT = np.linalg.norm(data[C] - data[t])
+                d = (AT + BT + 2 * CT) / ((abs(AT - BT) + AB)+e)
         if d > max:
             max = d
             target = t
@@ -920,12 +1031,15 @@ def get_clusters_predict_labels(Graph: nx.Graph):
 
 
 @retry(retries=3, delay=0)
-def run_PRSC(data, label, K, theta, loop=1):
-    num_thread = math.ceil(math.ceil(len(label) / (theta * 100)))
+def run_PRSC(data, theta, loop=1, divide_method='default', K=2):
+    print(f'run PRSC with divide methodthe {divide_method} and theta {theta}')
+    num_thread = math.ceil(math.ceil(data.shape[0] / (theta * 100)))
+    K = num_thread
     # print(label)
     for i in range(loop):
         prs = PRS(data)
-        prs.get_clusters(num_thread, threshold_clusters=K)
+        prs.get_clusters(num_thread, threshold_clusters=K,
+                         divide_method=divide_method)
         # draw_matrix(prs.results)
         # print(prs.results)
         prs.get_results()
@@ -934,10 +1048,13 @@ def run_PRSC(data, label, K, theta, loop=1):
         assert len(roots) == K
         assert len(ET.nodes) == data.shape[0]
         assert len(ET.edges) == data.shape[0] - K
+    print(f'finish PRSC with divide methodthe {
+          divide_method} and theta {theta}')
     return ET
 
 
 if __name__ == '__main__':
+    raise Exception('this is a module file, please do not run it directly!')
     # {"breast-w", "ecoli", "glass", "ionosphere", "iris", "kdd_synthetic_control", "mfeat-fourier", "mfeat-karhunen","mfeat-zernike"};
     # {"optdigits", "segment", "sonar", "vehicle", "waveform-5000", "letter", "kdd_synthetic_control"};
     data_names = ["iris", "sonar", "glass", "ecoli", "ionosphere", "kdd_synthetic_control", "vehicle",
