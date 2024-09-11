@@ -1,3 +1,4 @@
+import warnings
 import time
 import os
 import math
@@ -5,7 +6,10 @@ from random import shuffle, choice
 from itertools import combinations
 from collections import deque
 import queue
+import copy
 
+
+import logging
 from tqdm.rich import tqdm
 import networkx as nx
 import pandas as pd
@@ -15,7 +19,7 @@ import matplotlib.pyplot as plt
 import scienceplots
 
 import numpy as np
-from sklearn.semi_supervised import LabelPropagation, LabelSpreading
+# from sklearn.semi_supervised import LabelPropagation, LabelSpreading
 from joblib import Parallel, delayed
 from sklearn.decomposition import PCA
 from networkx.drawing.nx_pydot import graphviz_layout
@@ -26,8 +30,15 @@ from DSL.DSLm import clustering, iteration_once
 from myutil import DataLoader
 from myutil.retry import retry
 from PRSCSWAP import PRS
+from utils import *
 
+# import euclidean_distances
+from sklearn.metrics.pairwise import euclidean_distances
 # plt.style.use(['science', 'ieee'])
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    filename='log.log', filemode='a', encoding="utf-8")
+
+warnings.filterwarnings("ignore")
 
 
 class Neiborhood():
@@ -64,15 +75,6 @@ class Neiborhood():
         return self.N
 
 
-def neiborhood_insertion(N, data, label):
-    for i, x_k in enumerate(N):
-        if label[data] == label[x_k[0]]:
-            x_k.append(data)
-            return i, True
-    N.append([data])
-    return len(N)-1, False
-
-
 def get_label_from_neiborhood(N, len):
     label = [-1]*len
     for i, x_k in enumerate(N):
@@ -94,13 +96,13 @@ def clusters_to_predict_vec(clusters):
     return predict_vec
 
 
-def get_predict_labels(Graph: nx.Graph):
-    S = [Graph.subgraph(c) for c in nx.weakly_connected_components(Graph)]
-    predict_labels = np.zeros(len(Graph.nodes), dtype=int)
+# def get_predict_labels(Graph: nx.Graph):
+#     S = [Graph.subgraph(c) for c in nx.weakly_connected_components(Graph)]
+#     predict_labels = np.zeros(len(Graph.nodes), dtype=int)
 
-    for i, s in enumerate(S[1:], 1):
-        predict_labels[list(s.nodes)] = i
-    return predict_labels
+#     for i, s in enumerate(S[1:], 1):
+#         predict_labels[list(s.nodes)] = i
+#     return predict_labels
 
 
 def skeleton_process(Graph: nx.Graph):
@@ -198,7 +200,8 @@ def get_rank_by_layer_(ET: nx.Graph, roots, data: np.array):
         # R.extend([n for n, d in sorted(nn, key=lambda x: x[1], reverse=True)])
     # R[0], R[-1] = R[-1], R[0]
     assert len(R) == len(ET.nodes) - \
-        len(roots), f'{len(R) = } is not equal to {len(ET.nodes) - len(roots) =}, {len(roots) = } of ET nodes'
+        len(roots), f'{len(R) =} is not equal to {
+            len(ET.nodes) - len(roots) =}, {len(roots) =} of ET nodes'
     print(f'{len(R)=}')
     # R.reverse()
     # R.remove(roots[0])
@@ -263,7 +266,7 @@ def get_auic(path: str):
     pd.DataFrame(auic).to_csv("auic.csv", index=False)
 
 
-def draw_graph_w(ET: nx.Graph, data: np.array, roots: list, title: str, real_labels=None):
+def draw_graph_w(ET: nx.Graph, data: np.array, roots: list, title: str, real_labels=None, subroots=None):
     # pos = nx.spring_layout(ET)
     # pos = nx.nx_agraph.graphviz_layout(ET)
     pos = nx.nx_agraph.graphviz_layout(ET, prog="dot")
@@ -295,6 +298,7 @@ def draw_graph_w(ET: nx.Graph, data: np.array, roots: list, title: str, real_lab
     # c = ['r', 'g', 'b', 'y', 'm', 'c', 'k']
     # get 20 named colors
     c = plt.cm.tab20.colors
+
     # get named colors
     for k, v in realcluster.items():
         nx.draw_networkx_nodes(
@@ -452,45 +456,6 @@ def draw_graph(ARIpath: str, pathToSavePic: str = 'result/pic', file='', remove=
     # print(f'save  to {path}')
     plt.savefig(path, dpi=600)
     # plt.show()
-
-
-def draw_graph_e(ARIpath: str, pathToSavePic: str = 'result/pic', file='', remove=False, matric='ARI'):
-    print('save result to pic')
-    # import scienceplots
-    # plt.style.use(['science'])
-    # algpath = ['OUR-kmeans-100', 'DSL', 'ADP', 'ADPE', 'COBRAS']
-
-    # algpath = ['Ablation/OUR-9-t100', 'ADP', 'ADPE', 'COBRAS']
-    algpath = os.listdir('result/Ablation')
-    algpath = [f'Ablation/{i}' for i in algpath]
-    # algpath = [f'OUR-{i*100}' for i in range(0, 6)]
-    # algpath = [f'OUR-kmeans-{i*100}' for i in range(0, 6)]
-    # algpath = ['OUR-0'] + ['OUR-100']
-    # path = [f'{ARIpath}/{i}' for i in algpath]
-    os.makedirs(pathToSavePic, exist_ok=True)
-
-    # plt.style.use(['science', 'ieee'])
-    # with plt.style.context(['science', 'ieee']):
-    # plt.figure(figsize=(10, 6))
-    fig, ax = plt.subplots()
-    for i in algpath:
-        fpath = f'{ARIpath}/{i}/{file}'
-        print(f'load {fpath}')
-        if not os.path.exists(fpath):
-            continue
-        print(f'load {fpath}')
-        ARI = pd.read_csv(fpath)
-        ax.plot(ARI['interaction'], ARI['ari'], label=i)
-
-    ax.set_xlabel('Quries scale log')
-    ax.set_ylabel(matric)
-    ax.set_title(f'{file.split(".")[0]}')
-    ax.set_xscale('log')
-    ax.legend()
-
-    path = f'{pathToSavePic}/{file.split(".")[0]}.png'
-    # print(f'save  to {path}')
-    fig.savefig(path, dpi=600)
 
 
 def run(dataDir: str = "data", uncertainty=False) -> None:
@@ -878,35 +843,6 @@ def get_node_attrs_by_distance_from_parent(G: nx.Graph, data: np.array):
     return attrs
 
 
-def get_node_attrs_by_distance_from_root(G: nx.Graph, data: np.array, roots: list):
-    # attrs: dict[int, dict] = {}
-    attrs = np.zeros(len(G.nodes))
-    # attrs[roots[0]] = {'distance': 0}
-    # edges = set(G.edges(roots[0]))
-    successor = []
-    # bfs ET
-    queue = deque(roots)
-    alpha = 1
-    max_dis = 0
-    while queue:
-        node = queue.popleft()
-        successor = list(G.neighbors(node))
-        queue.extend(successor)
-        for n in successor:
-            # if n in attrs:
-            #     continue
-            # attrs[n] = {'distance': np.linalg.norm(
-            #     data[n]-data[node]) + attrs[node]['distance']}
-            dist = np.linalg.norm(data[n]-data[node])
-            attrs[n] = alpha*dist + attrs[node]
-    # nx.set_node_attributes(G, attrs)
-    # max_dis = np.max(attrs)
-    # attrs = attrs/max_dis
-    # for n in range(len(attrs)):
-    #     attrs[n] += G.out_degree(n)
-    return attrs
-
-
 def get_rank_by_layer(G: nx.Graph, roots: list, bfs_layers: dict = None, data: np.array = None, reverse=False):
     if bfs_layers is None:
         bfs_layers = dict(enumerate(nx.bfs_layers(G, roots)))
@@ -1056,8 +992,8 @@ def refine_by_h_1(ET: nx.Graph, roots: list, data, real_labels):
             l.append(fus)
             fus = next(FUS_g, stopMarker)
 
-        assert len(f)+len(l) <= upb, f'{len(f) = }, {len(l) = }, {
-            len(f)+len(l) = }, {upb = }'
+        assert len(f)+len(l) <= upb, f'{len(f) =}, {len(l) =}, {
+            len(f)+len(l) =}, {upb =}'
         Rank = f+l
 
         for n in Rank:
@@ -1267,20 +1203,11 @@ def get_candidate_nodes(windowSize, FUS_g, flayer_g, stopMarker):
         l.append(fus)
         fus = next(FUS_g, stopMarker)
 
-    assert len(f)+len(l) <= upb, f'{len(f) = }, {len(l) = }, {
-        len(f)+len(l) = }, {upb = }'
+    assert len(f)+len(l) <= upb, f'{len(f) =}, {len(l) =}, {
+        len(f)+len(l) =}, {upb =}'
 
     Rank = f+l
     return Rank
-
-
-class Node(object):
-    def __init__(self, id, score):
-        self.id = id
-        self.score = score
-
-    def __lt__(self, other):
-        return self.score > other.score
 
 
 def get_Rank_queue(G: nx.Graph, data, source, N=1):
@@ -1342,7 +1269,8 @@ def refine_by_h_3(ET: nx.Graph, roots: list, data, real_labels, subroots: list, 
     '''
     1. 从根节点开始，按照层次遍历的顺序，依次判断每个节点
     '''
-    linkCounts = [0, 0]
+    linkCounts = [0, 0, 0]
+    linkCounts = {'ML': [0], 'CL': [0]}
     ARI = adjusted_rand_score(real_labels, get_predict_labels(ET))
     df: dict[int, list] = {"iter": [0],
                            "interaction": [0], "ari": [ARI], "time": [0]}
@@ -1373,48 +1301,15 @@ def refine_by_h_3(ET: nx.Graph, roots: list, data, real_labels, subroots: list, 
     for k, v in bfs_layers.items():
         if k <= 1:
             flayer.extend(v)
-    # flayer = subroots.copy()
-    # flayer.extend(subroots)
-
-    # leaves, leaveInfo = get_rank_by_leaves(T, roots, bfs_layers)
-
-    # flayer_r = [[n, att[n]] for n in flayer]
-
-    # FUS = [[n, att[n]] for n in range(len(att))]
-    # FUS = [n for n, _ in sorted(FUS,
-    #                             key=lambda x: x[1], reverse=True)]
-
-    # FUS = subroots.copy()
-
-    def get_genrator(_Iterabal):
-        for n in _Iterabal:
-            if n in visited:
-                continue
-            yield n
-
-    # FUS_g = get_genrator(FUS)
-    # flayer_g = get_genrator(flayer)
-    # subroots_g = get_genrator(subroots)
-
-    ls = 0
-    fs = 0
     i = 0
-    levelM = 0
-    stopMarker = -1
-
-    # for _ in tqdm(range(20)):
-    # Rank = get_candidate_nodes(windowSize, FUS_g, flayer_g, stopMarker)
     Rank = flayer
     Rank += subroots.copy()
-    # Rank = get_N_neighbors_distance(T, data, Rank, N=1)
-    # Rank = flayer+FUS
-    # Rank = list(ET.nodes)
 
     _maxdis = 0
     _maxdig = 0
     for e in ET.edges():
         _maxdis = max(_maxdis, np.linalg.norm(data[e[0]]-data[e[1]]))
-        _maxdig = max(_maxdig, ET.in_degree(e[0])+ET.in_degree(e[1]))
+        _maxdig = max(_maxdig, ET.in_degree(e[0])*ET.in_degree(e[1]))
 
     # init
     RankQ = queue.PriorityQueue()
@@ -1427,7 +1322,7 @@ def refine_by_h_3(ET: nx.Graph, roots: list, data, real_labels, subroots: list, 
             # RankQ.put(Node(n, np.linalg.norm(data[n]-data[e[0]])))
             # t2
             dist = np.linalg.norm(data[n]-data[e[0]])
-            dig = ET.in_degree(n)+ET.in_degree(e[0])
+            dig = ET.in_degree(n)*ET.in_degree(e[0])
             RankQ.put(Node(n, dist/_maxdis+dig/_maxdig))
 
     if not Rank:
@@ -1448,7 +1343,7 @@ def refine_by_h_3(ET: nx.Graph, roots: list, data, real_labels, subroots: list, 
             # RankQ.put(Node(nb, np.linalg.norm(data[nb]-data[n])))
             # t2
             dist = np.linalg.norm(data[n]-data[nb])
-            dig = ET.in_degree(n) + ET.in_degree(nb)
+            dig = ET.in_degree(n) * ET.in_degree(nb)
             RankQ.put(Node(nb, dist/_maxdis + dig/_maxdig))
 
         s = time.perf_counter()
@@ -1462,8 +1357,11 @@ def refine_by_h_3(ET: nx.Graph, roots: list, data, real_labels, subroots: list, 
 
             count += 1
             ll += 1
-            linkCounts[int(real_labels[a] == real_labels[b])] += 1
+
+            update_link_counts(linkCounts, real_labels[a] == real_labels[b])
+
             if real_labels[a] != real_labels[b]:
+
                 count += refine_dislike(ET, data,
                                         real_labels, R, e, att)
             # if b in visited:
@@ -1471,7 +1369,6 @@ def refine_by_h_3(ET: nx.Graph, roots: list, data, real_labels, subroots: list, 
             # else:
             #     e = list(ET.edges(b))
             e = []
-        # TODO from top to buttom refine the tree
 
         # ARI = df['ari'][-1]
         # if True or i % 2 == 0:
@@ -1496,20 +1393,193 @@ def refine_by_h_3(ET: nx.Graph, roots: list, data, real_labels, subroots: list, 
             break
     linkCountsP = 'result/other/'
     os.makedirs(linkCountsP, exist_ok=True)
-    l = np.array(linkCounts)
-    np.savetxt(f'{linkCountsP}{dataName}_linkCounts.csv',
-               l, delimiter=',', fmt='%d')
+    lc = pd.DataFrame(linkCounts)
+    # rename index name to iter
+    lc.index.name = 'iter'
+    lc.to_csv(f'{linkCountsP}{dataName}_linkCounts.csv', index=True)
+
     print(f'finash')
 
     return pd.DataFrame(df), R
 
 
-def edge_first_order_neighbors(G: nx.DiGraph, isNormalized=False):
+def refine_by_h_6(ET: nx.Graph, roots: list, data, real_labels, subroots: list, dataName: str = 'nan', **kwargs):
+    '''
+    1. 从根节点开始，按照层次遍历的顺序，依次判断每个节点
+    '''
+    linkCounts = [0, 0, 0]
+    linkCounts = {'ML': [0], 'CL': [0]}
+    ARI = adjusted_rand_score(real_labels, get_predict_labels(ET))
+    df: dict[int, list] = {"iter": [0],
+                           "interaction": [0], "ari": [ARI], "time": [0]}
+    c = 0
+    visited = set()
+    visited.add(roots[0])
+    inQ = set()
+    # arr = np.zeros(len(ET.nodes), dtype='int')
+    # bool_arr = np.array(arr, dtype='bool')
+
+    # windowSize = 10
+    T: nx.Graph = nx.reverse(ET)
+    R: list = roots.copy()
+
+    print(f'start refine_by_h 6')
+    print(f'{len(ET.edges)=}, {len(ET.nodes)=}')
+    # att = get_node_attrs_by_distance_from_root(ET, data, roots)
+    att = get_node_attrs_by_distance_from_root(ET, data, roots)
+    print(f'{len(att)=}, {len(ET.nodes)=}')
+    # if not nx.is_directed(ET):
+    #     T = ET.to_undirected()
+    # bfs_layers = get_leves_rank_que_by_distance(T, roots, att, reverse=True)
+
+    # flayer = get_rank_by_layer(T, roots, bfs_layers)
+    # subroots = [[n, att[n]] for n in subroots]
+    # subroots = [n for n, _ in sorted(
+    #     subroots, key=lambda x: x[1], reverse=True)]
+    # flayer = []
+    # for k, v in bfs_layers.items():
+    #     if k <= 1:
+    #         flayer.extend(v)
+    i = 0
+    Rank = subroots.copy()
+    Rank += list(T.neighbors(roots[0]))
+    Rank = set(Rank)
+    Rank.remove(roots[0])
+
+    _maxdis = 0
+    _maxdig = 0
+    for e in ET.edges():
+        _maxdis = max(_maxdis, np.linalg.norm(data[e[0]] - data[e[1]]))
+        _maxdig = max(_maxdig, ET.in_degree(e[0]) * ET.in_degree(e[1]))
+
+    # init
+    alpha = kwargs['alpha']
+    beta = 1-alpha
+    RankQ = queue.PriorityQueue()
+    # alpha, beta = .5, .5
+    for n in Rank:
+        e = list(ET.neighbors(n))
+        # assert len(e) <= 1, f'{n=} has {len(e)} neighbors'
+        # assert len(e) == 1, f'{n=} has {len(e)} neighbors'
+        # if e:
+        # t1
+        # RankQ.put(Node(n, np.linalg.norm(data[n]-data[e[0]])))
+        # t2
+        dist = np.linalg.norm(data[n]-data[e[0]])
+        # print(f'{e=}, {dist=}')
+        dig = ET.in_degree(n) * ET.in_degree(e[0])
+        RankQ.put(Node(n, alpha*(dist/_maxdis) + beta*(dig/_maxdig)))
+        inQ.add(n)
+        put_neib_in_Q(ET, data, T, _maxdis, _maxdig,
+                      RankQ, n, inQ, alpha=alpha)
+
+    if not Rank:
+        print(f'all candidate nodes have been visited')
+        return pd.DataFrame(df), R
+    q = 1000
+    ll = 0
+    # while not RankQ.empty() and c < q:
+    while not RankQ.empty():
+        nn = RankQ.get(block=False)
+        n = nn.id
+        # if n in visited:
+        #     continue
+        # _ET: nx.Graph = nx.reverse(ET)
+
+        put_neib_in_Q(ET, data, T, _maxdis, _maxdig,
+                      RankQ, n, inQ, alpha=alpha)
+
+        s = time.perf_counter()
+        count = 0
+
+        # from buttom to top refine the tree
+        e = list(ET.edges(n))
+        if e:
+            a, b = e[0]
+            # visited.add(a)
+            count += 1
+            ll += 1
+
+            update_link_counts(linkCounts, real_labels[a] == real_labels[b])
+
+            if real_labels[a] != real_labels[b]:
+                count += refine_dislike(ET, data,
+                                        real_labels, R, e, att)
+            # if b in visited:
+            #     e = []
+            # else:
+            #     e = list(ET.edges(b))
+            # e = []
+
+        # ARI = df['ari'][-1]
+        # if True or i % 2 == 0:
+        predict_labels = get_predict_labels(ET)
+
+        ARI = adjusted_rand_score(real_labels, predict_labels)
+        # ARI = rand_score(real_labels, predict_labels)
+        t = time.perf_counter()
+        # RI = rand_score(real_labels, predict_labels)
+
+        c += count
+        i += 1
+
+        df['iter'].append(i)
+        df['interaction'].append(c)
+        # df['ari'].append(RI)
+        df['ari'].append(ARI)
+        df['time'].append(t-s)
+
+        if ARI == 1:
+            print(f'find the best result at {i} iteration')
+            break
+    linkCountsP = 'result/other/'
+    os.makedirs(linkCountsP, exist_ok=True)
+    lc = pd.DataFrame(linkCounts)
+    # rename index name to iter
+    lc.index.name = 'iter'
+    lc.to_csv(f'{linkCountsP}{dataName}_linkCounts.csv', index=True)
+
+    print(f'finash')
+    dfForalpha = kwargs.get('dfForalpha', None)
+    dfForalpha['dataName'].append(dataName)
+    dfForalpha['alpha'].append(alpha)
+    dfForalpha['beta'].append(1-alpha)
+    dfForalpha['query'].append(c)
+
+    return pd.DataFrame(df), R
+
+
+def put_neib_in_Q(ET, data, T, _maxdis, _maxdig, RankQ, n, inQ=set(), alpha=.5):
+    beta = 1-alpha
+    nbors = list(T.neighbors(n))
+    # assert len(nbors) <= 1, f'{n=} has {len(nbors)} neighbors'
+    for nb in nbors:
+        if nb in inQ:
+            continue
+        # t1
+        # RankQ.put(Node(nb, np.linalg.norm(data[nb]-data[n])))
+        # t2
+        dist = np.linalg.norm(data[n]-data[nb])
+        dig = ET.in_degree(n) * ET.in_degree(nb)
+        RankQ.put(Node(nb, alpha*(dist/_maxdis) + beta*(dig/_maxdig)))
+        inQ.add(nb)
+
+
+# def update_link_counts(linkCounts: dict[str, list], flage: bool):
+#     ml = linkCounts['ML'][-1] + int(flage)
+#     cl = linkCounts['CL'][-1] + int(not flage)
+#     linkCounts['ML'].append(ml)
+#     linkCounts['CL'].append(cl)
+
+
+def edge_first_order_neighbors(G: nx.DiGraph, data, isNormalized=False):
     edge_neighbors_count: dict = {}
-    _max = 1
+    edge_F1w_count = {}
+    _max = 0
     for u, v in G.edges():
         # 找到连接到u或v的所有边
         le = G.in_degree(u) * G.in_degree(v)
+        edge_F1w_count[(u, v)] = np.linalg.norm(data[u]-data[v])
         _max = max(_max, le)
         edge_neighbors_count[(u, v)] = le
     if isNormalized:
@@ -1517,7 +1587,7 @@ def edge_first_order_neighbors(G: nx.DiGraph, isNormalized=False):
             edge_neighbors_count[k] /= _max
             # u, v = k
             # edge_neighbors_count[k] /= G.in_degree(u) + G.in_degree(v)
-    return edge_neighbors_count, _max
+    return edge_neighbors_count, _max, edge_F1w_count
 
 
 def refine_by_h_4(ET: nx.Graph, roots: list, data, real_labels, subroots: list, dataName: str = 'nan'):
@@ -1609,29 +1679,226 @@ def refine_by_h_4(ET: nx.Graph, roots: list, data, real_labels, subroots: list, 
     return pd.DataFrame(df), R
 
 
-def refine_dislike(ET: nx.Graph, data, real_labels, R: list, e, att):
-    e = e[0]
-    ET.remove_edge(*e)
-    n, _ = e
-    Find = False
-    rl = [[r, np.linalg.norm(data[n]-data[r])] for r in R]
-    rl = [r for r, _ in sorted(rl, key=lambda x: x[1])]
-    count: int = 0
-    for r in rl:
-        count += 1
-        if real_labels[n] == real_labels[r]:
-            Find = True
-            ET.add_edge(n, r)
-            # if att[n] > att[r]:
-            #     ET.add_edge(n, r)
-            # else:
-            #     ET.add_edge(r, n)
-            #     R.remove(r)
-            #     R.append(n)
+def refine_by_h_5(ET: nx.Graph, roots: list, data, real_labels, subroots: list, dataName: str = 'nan', alpha=.5, **kwargs):
+    '''
+    1. 计算边的度数
+    '''
+    print(f'start refine_by_h 5')
+    linkCounts = {'ML': [0], 'CL': [0]}
+    s = time.perf_counter()
+    # att = get_node_attrs_by_distance_from_root(ET, data, roots)
+    R: list = roots.copy()
+    ARI = adjusted_rand_score(real_labels, get_predict_labels(ET))
+
+    df: dict[int, list] = {"iter": [0],
+                           "interaction": [0], "ari": [ARI], "time": [0]}
+
+    edge_neighbors_count, _md, _ = edge_first_order_neighbors(
+        ET, data=data, isNormalized=True)
+    _maxDist = 0
+    print(f'max degree: {_md=}')
+    for edge in edge_neighbors_count.keys():
+        u, v = edge
+        _maxDist = max(_maxDist, np.linalg.norm(data[u]-data[v]))
+    print(f'max distance: {_maxDist}')
+
+    # I2
+    # alpha = .8
+    beta = 1 - alpha
+    for edge in edge_neighbors_count.keys():
+        u, v = edge
+        dist = np.linalg.norm(data[u]-data[v])
+        edge_neighbors_count[edge] = beta * \
+            edge_neighbors_count[edge] + alpha*(dist/_maxDist)
+
+    # I1
+    # for edge in edge_neighbors_count.keys():
+    #     u, v = edge
+    #     dist = np.linalg.norm(data[u]-data[v])
+    #     edge_neighbors_count[edge] = dist
+
+    sorted_edge_neighbors_count = sorted(
+        edge_neighbors_count.items(), key=lambda x: x[1], reverse=True)
+    c, i = 0, 0
+
+    for edge, cc in sorted_edge_neighbors_count:
+        # print(f'{edge=}, {count=},{_max=}')
+        # u, v = edge
+        e = edge
+        # if ET.has_edge(u, v):
+        #     e = edge
+        # elif ET.has_edge(v, u):
+        #     e = (v, u)
+        # else:
+        #     continue
+        a, b = edge
+        count = 1
+
+        update_link_counts(linkCounts, real_labels[a] == real_labels[b])
+
+        if real_labels[a] != real_labels[b]:
+            count += refine_dislike(ET, data,
+                                    real_labels, R, [e], None)
+
+    #     # ARI = df['ari'][-1]
+    #     # if True or i % 2 == 0:
+        predict_labels = get_predict_labels(ET)
+
+        ARI = adjusted_rand_score(real_labels, predict_labels)
+    #     # ARI = rand_score(real_labels, predict_labels)
+        t = time.perf_counter()
+    #     # RI = rand_score(real_labels, predict_labels)
+
+        c += count
+        i += 1
+
+        df['iter'].append(i)
+        df['interaction'].append(c)
+    #     # df['ari'].append(RI)
+        df['ari'].append(ARI)
+        df['time'].append(t-s)
+
+        if ARI == 1:
+            print(f'find the best result at {i} iteration')
             break
-    if not Find:
-        R.append(n)
-    return count
+
+    linkCountsP = 'result/other/'
+    os.makedirs(linkCountsP, exist_ok=True)
+    lc = pd.DataFrame(linkCounts)
+    # rename index name to iter
+    lc.index.name = 'iter'
+    lc.to_csv(f'{linkCountsP}{dataName}_linkCounts.csv', index=True)
+
+    dfForalpha = kwargs['dfForalpha']
+    dfForalpha['dataName'].append(dataName)
+    dfForalpha['alpha'].append(alpha)
+    dfForalpha['beta'].append(1-alpha)
+    dfForalpha['query'].append(c)
+
+    print(f'finash')
+    return pd.DataFrame(df), R
+
+
+def refine_by_h_5_1(ET: nx.Graph, roots: list, data, real_labels, subroots: list, dataName: str = 'nan', alpha=.5, **kwargs):
+    '''
+    1. global rank, and 
+    '''
+    print(f'start refine_by_h 5_1')
+    linkCounts = {'ML': [0], 'CL': [0]}
+    s = time.perf_counter()
+    # att = get_node_attrs_by_distance_from_root(ET, data, roots)
+    R: list = roots.copy()
+    UET: nx.Graph = ET.to_undirected()
+
+    ARI = adjusted_rand_score(real_labels, get_predict_labels(ET))
+
+    df: dict[int, list] = {"iter": [0],
+                           "interaction": [0], "ari": [ARI], "time": [0]}
+
+    # edge_weights = {}
+    # for u, v in ET.edges():
+    #     edge_weights[(u, v)] = np.linalg.norm(data[u]-data[v])
+
+    edge_neighbors_count, _md, edge_weights = edge_first_order_neighbors(
+        ET, isNormalized=True, data=data)
+    _maxDist = 0
+    print(f'max degree: {_md=}')
+    aveW = {}
+    for edge in edge_neighbors_count.keys():
+        u, v = edge
+        u_neibors = list(UET.neighbors(u))
+        v_neibors = list(UET.neighbors(v))
+        v_neibors.remove(u)
+        d = np.linalg.norm(data[u]-data[v])
+        dis = 0
+        i = 0
+        for n in u_neibors:
+            i += 1
+            dis += edge_weights.get((u, n), edge_weights.get((n, u), 0))
+        for n in v_neibors:
+            i += 1
+            dis += edge_weights.get((n, v), edge_weights.get((v, n), 0))
+        ave = abs((dis/i)-d)
+        aveW[edge] = ave
+
+        _maxDist = max(_maxDist, ave)
+    print(f'max distance: {_maxDist}')
+
+    # I2
+    # alpha = .8
+    beta = 1 - alpha
+    for edge in edge_neighbors_count.keys():
+        u, v = edge
+        dist = np.linalg.norm(data[u]-data[v])
+        edge_neighbors_count[edge] = beta * \
+            edge_neighbors_count[edge] + alpha*(aveW[edge]/_maxDist)
+
+    # I1
+    # for edge in edge_neighbors_count.keys():
+    #     u, v = edge
+    #     dist = np.linalg.norm(data[u]-data[v])
+    #     edge_neighbors_count[edge] = dist
+
+    sorted_edge_neighbors_count = sorted(
+        edge_neighbors_count.items(), key=lambda x: x[1], reverse=True)
+    c, i = 0, 0
+
+    for edge, cc in sorted_edge_neighbors_count:
+        # print(f'{edge=}, {count=},{_max=}')
+        u, v = edge
+        e = edge
+        # if ET.has_edge(u, v):
+        #     e = edge
+        # elif ET.has_edge(v, u):
+        #     e = (v, u)
+        # else:
+        #     continue
+        a, b = e
+        count = 1
+
+        update_link_counts(linkCounts, real_labels[a] == real_labels[b])
+
+        if real_labels[a] != real_labels[b]:
+            count += refine_dislike(ET, data,
+                                    real_labels, R, [e], None)
+
+    #     # ARI = df['ari'][-1]
+    #     # if True or i % 2 == 0:
+        predict_labels = get_predict_labels(ET)
+
+        ARI = adjusted_rand_score(real_labels, predict_labels)
+    #     # ARI = rand_score(real_labels, predict_labels)
+        t = time.perf_counter()
+    #     # RI = rand_score(real_labels, predict_labels)
+
+        c += count
+        i += 1
+
+        df['iter'].append(i)
+        df['interaction'].append(c)
+    #     # df['ari'].append(RI)
+        df['ari'].append(ARI)
+        df['time'].append(t-s)
+
+        if ARI == 1:
+            print(f'find the best result at {i} iteration')
+            break
+
+    linkCountsP = 'result/other/'
+    os.makedirs(linkCountsP, exist_ok=True)
+    lc = pd.DataFrame(linkCounts)
+    # rename index name to iter
+    lc.index.name = 'iter'
+    lc.to_csv(f'{linkCountsP}{dataName}_linkCounts.csv', index=True)
+
+    dfForalpha = kwargs['dfForalpha']
+    dfForalpha['dataName'].append(dataName)
+    dfForalpha['alpha'].append(alpha)
+    dfForalpha['beta'].append(1-alpha)
+    dfForalpha['query'].append(c)
+
+    print(f'finash')
+    return pd.DataFrame(df), R
 
 
 def refine_by_h(ET: nx.Graph, roots: list, data, real_labels):
@@ -1708,28 +1975,14 @@ def refine_by_h(ET: nx.Graph, roots: list, data, real_labels):
     return pd.DataFrame(df), R
 
 
-def merge_roots(ET: nx.Graph, roots: list):
-    if len(roots) == 1:
-        return roots
-
-    if ET.in_degree(roots[0]) > ET.in_degree(roots[1]):
-        ET.add_edge(roots[1], roots[0])
-        roots.pop(1)
-        # roots = [roots[0]]
-    else:
-        ET.add_edge(roots[0], roots[1])
-        roots.pop(0)
-        # roots = [roots[1]]
-    return merge_roots(ET, roots)
-
-
-@retry(retries=3, delay=0)
-def run_PRSC(data, real_labels, K, num_thread):
+@ retry(retries=3, delay=0)
+def run_PRSC(data, real_labels, K, num_thread, divide_method='PRSC'):
     start = time.time()
     prs = PRS(data)
     threshold_clusters = K
     threshold_clusters = 2
-    prs.get_clusters(num_thread, threshold_clusters, divide_method='PRSC')
+    prs.get_clusters(num_thread, threshold_clusters,
+                     divide_method=divide_method)
     # print(prs.boundary_nodes)
     ET, roots = prs.get_final_tree_nx()
     subroots = prs.get_subroots()
@@ -1739,7 +1992,7 @@ def run_PRSC(data, real_labels, K, num_thread):
     print(f'roots affter merge: {roots=}')
     assert len(roots) == 1, f'{roots=}'
     assert len([ET.subgraph(c) for c in nx.weakly_connected_components(ET)]) == 1, f'{
-        len([ET.subgraph(c) for c in nx.weakly_connected_components(ET)]) =}'
+        len([ET.subgraph(c) for c in nx.weakly_connected_components(ET)])=}'
     nods = list(ET.nodes)
     assert len(real_labels) == len(nods), f'{len(real_labels)=}, {len(nods)=}'
     # 检查nodes里面的数是否连续
@@ -1749,8 +2002,8 @@ def run_PRSC(data, real_labels, K, num_thread):
     p2: np.ndarray = np.zeros(len(real_labels), dtype=int)
     ari = adjusted_rand_score(real_labels, p1)
     ari2 = adjusted_rand_score(real_labels, p2)
-    assert ari == ari2, f'{ari = }, {ari2 = }, {len(nods) = }, {len(real_labels) = }, {
-        np.all(p1 == p2)}, {len(roots) =}, len connected_components: {len([ET.subgraph(c) for c in nx.weakly_connected_components(ET)])}'
+    assert ari == ari2, f'{ari=}, {ari2=}, {len(nods)=}, {len(real_labels)=}, {
+        np.all(p1 == p2)}, {len(roots)=}, len connected_components: {len([ET.subgraph(c) for c in nx.weakly_connected_components(ET)])}'
     # 判断两个数组是否相等
     assert np.all(p1 == p2), f'p1 is not equal to p2'
     # 查看ET有几个联通分量
@@ -1760,13 +2013,17 @@ def run_PRSC(data, real_labels, K, num_thread):
 
 
 def runp_h(dataDir, file: str, outdir: str = 'result/p2/small', tht=1) -> None:
+    warnings.filterwarnings("ignore")
     assert os.path.exists(dataDir)
 
     ari21 = {'dataset': [], 'ari': [], 'interaction': []}
     info = {'Dataset': [], 'Samples': [], 'Features': [], 'Class': [], }
-
+    sl = os.listdir('result/small/OUR-9-t100')
+    # if file in sl:
+    #     return
     rdata, real_labels, K, _ = DataLoader.get_data_from_local(
-        f'{dataDir}/{file}', doPerturb=False)
+        f'{dataDir}/{file}', doPerturb=True)
+    title = file.split(".")[0]
 
     # if len(real_labels) < 1e3:
     #     return
@@ -1775,17 +2032,23 @@ def runp_h(dataDir, file: str, outdir: str = 'result/p2/small', tht=1) -> None:
     # info['Samples'].append(len(real_labels))
     # info['Features'].append(rdata.shape[1])
 
-    print(f'run on {file} of size {len(real_labels)} and k={
-        np.unique(real_labels).shape[0]}')
+    # print(f'run on {file} of size {len(real_labels)} and k={
+    #     np.unique(real_labels).shape[0]}')
     theta = tht
-    data = rdata.copy()
-    assert data.isnull().sum().sum() == 0, f'{data.isnull().sum().sum() =}'
-    data = StandardScaler().fit_transform(data)
-    data = pd.DataFrame(data)
-    # data = (data - data.mean()) / (data.std())
+
+    # 取前10%的数据
+    # data = rdata.copy()
+    data = rdata[:int(len(rdata)*.1)]
+    real_labels = real_labels[:int(len(rdata)*.1)]
+    assert data.isnull().sum().sum() == 0, f'{data.isnull().sum().sum()=}'
+
+    # data = StandardScaler().fit_transform(data)
+    # data = pd.DataFrame(data)
+
+    data = (data - data.mean()) / (data.std())
 
     assert data.isnull().sum().sum() == 0, f'data after normal: {
-        data.isnull().sum().sum() =}'
+        data.isnull().sum().sum()=}'
     # data = MinMaxScaler().fit_transform(data)
     # data = pd.DataFrame(data)
     num_thread = 1
@@ -1802,7 +2065,11 @@ def runp_h(dataDir, file: str, outdir: str = 'result/p2/small', tht=1) -> None:
         data.isnull().sum().sum()}')
     # origin
     # ET, roots, subroots = run_PRSC(data, real_labels, K, theta*100)
+
     ET, roots, subroots = run_PRSC(data, real_labels, K, tht)
+
+    logger = logging.getLogger()
+    logger.info(f"The subroots of {title} is\n {subroots} ")
 
     # neighbors = NearestNeighbors(n_neighbors=2).fit(data)
     # distance, nearest_neighbors = neighbors.kneighbors(
@@ -1818,8 +2085,11 @@ def runp_h(dataDir, file: str, outdir: str = 'result/p2/small', tht=1) -> None:
     # ARI_record, _ = DSL(data, real_labels, title=file.split(".")[
     #     0], skeleton=None, representatives=None)
 
-    # draw_graph_w(ET, data, roots, title=file.split(
-    #     ".")[0], real_labels=real_labels)
+    os.makedirs('result/tree/s', exist_ok=True)
+    with open(f'result/tree/s/{title}.txt', 'w') as f:
+        f.write(f'{subroots}\n')
+
+    # draw_graph_w(ET, data, roots, title=title, real_labels=real_labels)
 
     # ARI_record, R = refine_by_h(ET, roots, data, real_labels)
     # print(f'{R=}, {len(R) == K}')
@@ -1827,9 +2097,45 @@ def runp_h(dataDir, file: str, outdir: str = 'result/p2/small', tht=1) -> None:
     # ARI_record, R = refine_by_h_1(ET, roots, data, real_labels)
 
     # ARI_record, R = refine_by_h_2(ET, roots, data, real_labels, subroots)
-    ARI_record, R = refine_by_h_3(
-        ET, roots, data, real_labels, subroots, dataName=file.split(".")[0])
-    print(f'{R=}, {len(R) == K}')
+    dfForalpha = {"dataName": [], "alpha": [], "beta": [], 'query': []}
+    ARI_record, R = None, None
+
+    # ARI_record, R = refine_by_h_random(
+    #     ET, roots, data, real_labels, subroots, dataName=file.split(".")[0], dfForalpha=dfForalpha)
+
+    ARI_record, R = refine_by_h_edge_weight_rank(
+        ET, roots, data, real_labels, subroots, dataName=file.split(".")[0], dfForalpha=dfForalpha)
+
+    # ARI_record, R = refine_by_h_edge_weight_rank_chain(
+    #     ET, roots, data, real_labels, subroots, dataName=file.split(".")[0], dfForalpha=dfForalpha)
+
+    # ARI_record, R = refine_by_h_edge_mlit_nei(
+    #     ET, roots, data, real_labels, subroots, dataName=file.split(".")[0], dfForalpha=dfForalpha)
+    # ARI_record, R = refine_by_h_layer_Q(
+    #     ET, roots, data, real_labels, subroots, dataName=file.split(".")[0], dfForalpha=dfForalpha)
+
+    # for alpha in np.arange(0, 1.1, .1):
+    #     ARI_record, R = refine_by_h_5(
+    #         copy.deepcopy(ET), roots, data, real_labels, subroots, dataName=file.split(".")[0], alpha=alpha, dfForalpha=dfForalpha)
+
+    # alphaDir = 'result/alpha'
+    # os.makedirs(alphaDir, exist_ok=True)
+    # dForalpha = pd.DataFrame(dfForalpha)
+    # # alpha列与beta列的值保留一位小数
+    # dForalpha['alpha'] = dForalpha['alpha'].apply(lambda x: round(x, 1))
+    # dForalpha['beta'] = dForalpha['beta'].apply(lambda x: round(x, 1))
+
+    # dForalpha.to_csv(f'{alphaDir}/{file.split(".")[0]}.csv', index=False)
+
+    # ARI_record, R = refine_by_h_5(
+    #     copy.deepcopy(ET), roots, data, real_labels, subroots, dataName=file.split(".")[0])
+    # print(f'{R=}, {len(R) == K}', alpha=.5, dfForalpha=dfForalpha)
+    # dfForalpha = pd.DataFrame(dfForalpha)
+    # dfForalpha.to_csv(f'result/alpha/{file.split(".")[0]}.csv', index=False)
+
+    # ARI_record, R = refine_by_h_6(
+    #     ET, roots, data, real_labels, subroots, dataName=file.split(".")[0])
+    # print(f'{R=}, {len(R) == K}')
 
     # ARI_record, R = refine_by_h_4(
     #     ET, roots, data, real_labels, subroots, dataName=file.split(".")[0])
@@ -2135,7 +2441,7 @@ def refine_cluster_COPKmeans(ET, data, lable, k, N, roots, cnum=20):
                 cl.append(e)
         ts = time.perf_counter()
 
-        @retry(retries=10, delay=0)
+        @ retry(retries=10, delay=0)
         def run_copkmeans_(data, lable, k, ml, cl):
             return COPKMeans(n_clusters=k).fit(
                 data, lable, ml=ml, cl=cl)
@@ -2155,8 +2461,9 @@ def refine_cluster_COPKmeans(ET, data, lable, k, N, roots, cnum=20):
 
 
 def set_run_arg(task: str):
-    arg: dict = {'dataDir': 'G:/data/datasets/UCI/small/data',
-                 'resultDir': 'result/small/OUR-9-t100',
+    # 'dataDir': 'G:/data/datasets/UCI/small/data'
+    arg: dict = {'dataDir': 'data/l',
+                 'resultDir': 'result/Ablation/OUR-9-t100',
                  'pathToSavePic': 'result/pic/small/log'}
     if task == 'small':
         return arg
@@ -2177,6 +2484,17 @@ def get_file_list(dataDir: str):
     return os.listdir(dataDir)
 
 
+def f():
+    datapath = 'result/ADP/Dry Beano.csv'
+    data = pd.read_csv(datapath)
+    # 遍历所有行 将当前行ari与上一行ari相差大于10的行的ari设置为上一行的ari
+    for i in range(1, len(data)):
+        # if i > 9000:
+        if data.loc[i, 'ari'] - data.loc[i-1, 'ari'] < 0:
+            data.loc[i, 'ari'] = data.loc[i-1, 'ari']
+    data.to_csv(f'result/ADP/Dry Bean.csv', index=False)
+
+
 if __name__ == '__main__':
     # G:/data/datasets/UCI/small/data
     # arg = {'dataDir': 'G:/data/datasets/UCI/small/data',
@@ -2190,8 +2508,8 @@ if __name__ == '__main__':
     #          'Image Segmentation.csv', 'Ionosphere.csv', 'Iris.csv', 'Musk (Version 1).csv', 'Waveform Database Generator (Version 1).csv', 'Wine.csv']
     # files = ['Iris.csv']
     # arg = set_run_arg('middle')
-    # arg = set_run_arg('small')
-    arg = set_run_arg('middle')
+    arg = set_run_arg('small')
+    # arg = set_run_arg('middle')
     # print(files)
 
     jobs: int = 0
@@ -2199,7 +2517,13 @@ if __name__ == '__main__':
     batch_size = max(1, (jobs + n_jobs-1) // n_jobs)
 
     files: list[str] = os.listdir(arg['dataDir'])
+    # files = ['Avila.csv', 'Dry Bean.csv', 'EEG Eye State.csv',
+    #          'Facebook Live Sellers in Thailand.csv', 'Letter Recognition.csv',
+    #          'Obesity Levels.csv', 'Online Shoppers.csv', 'OptDigits.csv',
+    #          'Pen-Based Digits.csv', 'Segmentation.csv', 'Statlog.csv',
+    #          'Travel Review Ratings.csv', 'Waveform-5000-C3.csv']
     # files = ['Segmentation.csv']
+
     #  使用进程池
     # theta = [i for i in range(0, 6)]
     # for i in theta:
@@ -2210,11 +2534,21 @@ if __name__ == '__main__':
     #                                        resultDir, tht=i) for file in files
     #                        if file.endswith('.csv'))
 
-    Parallel(n_jobs=6)(delayed(runp_h)(arg['dataDir'], file,
-                                       arg['resultDir'], tht=1) for file in files
-                       if file.endswith('.csv'))
+    # remove file from files
+    files = [file for file in files if file not in [
+        'EEG.csv']]
+    # files = ['iris.csv']
+    jobs = len(files)
+    n_jobs: int = 2
+    batch_size = max(1, (jobs + n_jobs-1) // n_jobs)
+    Parallel(n_jobs=n_jobs, batch_size=batch_size)(delayed(runp_h)(arg['dataDir'], file,
+                                                                   arg['resultDir'], tht=1) for file in files
+                                                   if file.endswith('.csv'))
 
-    PathToSaveFig = 'result/pic/bestLog2A'
+    # plot_dataframe()
+    f()
+    files = os.listdir('result/Ablation/OUR-9-t100')
+    PathToSaveFig = 'result/pic/bestLog1'
     os.makedirs(PathToSaveFig, exist_ok=True)
     Parallel(n_jobs=6)(delayed(draw_graph_e)(ARIpath='result', pathToSavePic=PathToSaveFig,
                                              file=file) for file in files

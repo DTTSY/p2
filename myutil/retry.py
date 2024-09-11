@@ -18,6 +18,8 @@ def retry(retries: int = 3, delay: float = 1) -> Callable:
         raise ValueError('Are you high, mate?')
 
     def decorator(func: Callable) -> Callable:
+        import traceback
+
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
             for i in range(1, retries + 1):  # 1 to retries + 1 since upper bound is exclusive
@@ -34,8 +36,9 @@ def retry(retries: int = 3, delay: float = 1) -> Callable:
                         break
                     else:
                         print(f'Error: {repr(e)} -> Retrying...')
+                        traceback.print_exc()
                         # Add a delay before running the next iteration
-                        sleep(delay)
+                        # sleep(delay)
 
         return wrapper
 

@@ -123,10 +123,10 @@ class PRS():
             sub_data.append(self.data.take(s))
         return sub_data
 
-    def divide_data_PRSC(self, theta):
+    def divide_data_PRSC(self, theta, k=0):
 
         ET = run_PRSC(
-            self.data, theta)
+            self.data, theta, K=k)
         # ET 是networkx Graph对象，取出ET的联通分量
         sub_data = []
         S = [ET.subgraph(c) for c in nx.weakly_connected_components(ET)]

@@ -4,11 +4,14 @@ import numpy as np
 import pandas as pd
 
 
-def preprocess_data(dataset_path: str, doPerturb: bool):
+def preprocess_data(dataset_path: str, doPerturb: bool, dropna: bool = True):
     df = pd.read_csv(dataset_path)
     # drop the duplicate rows
-    df.drop_duplicates(inplace=True)
-    df.dropna(inplace=True)
+    if dropna:
+        df.drop_duplicates(inplace=True)
+        df.dropna(inplace=True)
+        # 将index重置，drop=True表示删除原来的index列
+        df.reset_index(inplace=True, drop=True)
     # drop the rows with missing values
     # df.reset_index(inplace=True, drop=True)
 
@@ -34,8 +37,8 @@ def preprocess_data(dataset_path: str, doPerturb: bool):
     return data, label, k, _data
 
 
-def get_data_from_local(dataset_path: str, doPerturb: bool = False):
-    return preprocess_data(dataset_path, doPerturb)
+def get_data_from_local(dataset_path: str, doPerturb: bool = False, dropna: bool = True):
+    return preprocess_data(dataset_path, doPerturb, dropna=True)
 
 
 def list_available_datasets():
