@@ -500,7 +500,8 @@ def f():
 
 
 def donwnload_data():
-    data = {'kddcup99_SA': fetch_kddcup99(subset='SA', percent10=False),
+    data = {'kddcup99': fetch_kddcup99(percent10=False),
+            'kddcup99_SA': fetch_kddcup99(subset='SA', percent10=False),
             'kddcup99_SF': fetch_kddcup99(subset='SF', percent10=False),
             'kddcup99_http': fetch_kddcup99(subset='http', percent10=False),
             'kddcup99_smtp': fetch_kddcup99(subset='smtp', percent10=False),
@@ -562,22 +563,111 @@ def padding_data():
         df.to_csv(f'result/COBRA/d/{i}', index=False)
 
 
+def get_ARI_info(files):
+    algpath = ['Ablation/OUR-9-t100', 'ADP',
+               'ADPE', 'COBRAS', 'COBRA', 'FFQS', 'MinMax']
+    data = files
+    pathToSave = 'result/exp1'
+    os.makedirs(pathToSave, exist_ok=True)
+
+    for file in data:
+        df = {"Constraints": [],
+              'Ablation/OUR-9-t100': [],
+              'ADP': [], 'ADPE': [],
+              'COBRAS': [], 'COBRA': [],
+              'FFQS': [], 'MinMax': []}
+
+        fpath = f'result/Ablation/OUR-9-t100/{file}'
+        ARI = pd.read_csv(fpath)
+        iid = -1
+        for i in range(1, ARI.shape[0]):
+            if ARI['ari'].values[-i] != 1:
+                iid = i-1
+                break
+        i21 = ARI['interaction'].values[-iid]
+        # ARI['interaction'] = ARI['interaction'] + 1
+        # 将interaction 从0开始分成4份得到4个区间
+        interval = range(i21//4, i21+1, i21//4)
+
+        for k in df.keys():
+            df[k] = [-2]*len(interval)
+
+        for i in algpath:
+            fpath = f'result/{i}/{file}'
+            if not os.path.exists(fpath):
+                continue
+            print(f'load {fpath}')
+            ARI = pd.read_csv(fpath)
+
+            for id, j in enumerate(interval):
+                df['Constraints'][id] = j
+                # 使用二分查找找到最后一个小于等于j的interaction
+                idx = np.searchsorted(
+                    ARI['interaction'].values, j, side='right')
+                df[i][id] = ARI['ari'].values[idx-1]
+        df['Ablation/OUR-9-t100'][-1] = 1
+        pdf = pd.DataFrame(df)
+        # 保留两位小数，
+        # pdf = pdf.round(2)
+        pdf.to_csv(f'{pathToSave}/{file}', index=False, float_format='%.3f')
+
+
+def get_latex_tabel(files):
+    # files = os.listdir('result/exp1')
+    fdata = ''
+    for f in files:
+        if f.endswith('.txt'):
+            continue
+        with open(f'result/exp1/{f}', 'r') as file:
+            # 丢弃第一行
+            data = file.readlines()
+            data = data[1:]
+            data[0] = f'\\multirow{
+                len(data)}{{*}}{{{f.split(".")[0]}}} & {data[0]}'
+            for i in range(1, len(data)):
+                data[i] = '&' + data[i]
+            data = [d.replace(',', '&') for d in data]
+            if True:
+                for i in range(len(data)):
+                    s = data[i].split('&')
+                    s = [ss.strip() for ss in s]
+                    _max = -2
+                    for j in range(2, len(s)):
+                        _max = max(float(s[j]), _max)
+
+                    for j in range(2, len(s)):
+                        if float(s[j]) == _max:
+                            # \cellcolor{green!15}\textbf{1.000}
+                            s[j] = f'\\cellcolor{{yellow!25}}\\textbf{{{
+                                s[j]}}}'
+                    data[i] = '&'.join(s)
+                    data[i] = data[i] + '\n'
+
+            fdata = fdata + ''.join(data)
+    # save to file
+    fdata = fdata.replace('\n', '\\\\\n')
+    with open('result/exp1/latex.txt', 'w') as file:
+        file.write(fdata)
+    # 每4行末尾加上\hline
+    with open('result/exp1/latex.txt', 'r') as file:
+        data = file.readlines()
+        for i in range(3, len(data), 4):
+            data[i] = data[i] + '\\hline\n'
+    with open('result/exp1/latex.txt', 'w') as file:
+        file.writelines(data)
+
+
 if __name__ == '__main__':
-    # new_func()
-    # load kddcup99 dataset
-    # draw1()
-    # sort_data_by_size()
-    # draw()
-    # print(get_da())
-    # draw_final()
-    # print(os.listdir('result\Ablation\OUR-9-t100'))
-    # process_COBRA()
-    # sort_data_by_size()
-    # dirs = ['FFQS',"MinMax",'ADP','COBRAS','ADPE']
-    # for d in dirs:
-    #     for ff in os.listdir(f'result/{d}'):
-    #         if ff.endswith('.csv'):
-    #             # rename file replace _reslut with 5
-    #             os.rename(f'result/{d}/{ff}', f'result/{d}/{ff.replace('_result','')}')
-    # sort_data_by_size()
-    donwnload_data()
+    files = ['Iris.csv', 'thyroid.csv', 'Ionosphere.csv',
+             'musk.csv', 'led.csv', 'banknote.csv',
+             'Segmentation.csv', 'OptDigits.csv', 'Statlog.csv',
+             'Pen-Based Digits.csv', 'Online Shoppers.csv',
+             'Dry Bean.csv', 'Letter Recognition.csv', 'Avila.csv']
+
+    files = ['Ionosphere.csv', 'led.csv', 'banknote.csv', 'Segmentation.csv',
+             'OptDigits.csv', 'Statlog.csv', 'Pen-Based Digits.csv',
+             'Online Shoppers.csv', 'Codon.csv', 'Dry Bean.csv', 'HTRU2.csv',
+             'Letter Recognition.csv', 'Avila.csv', 'Adult.csv']
+
+    get_ARI_info(files=files)
+    get_latex_tabel(files=files)

@@ -4,8 +4,11 @@ import numpy as np
 import pandas as pd
 
 
-def preprocess_data(dataset_path: str, doPerturb: bool, dropna: bool = True):
+def preprocess_data(dataset_path: str, doPerturb: bool, dropna: bool = True, frac=1):
     df = pd.read_csv(dataset_path)
+    # shaffle the data
+    # np.random.seed(0)
+    # df = df.iloc[np.random.permutation(len(df))].reset_index(drop=True)
     # drop the duplicate rows
     if dropna:
         df.drop_duplicates(inplace=True)
@@ -15,7 +18,12 @@ def preprocess_data(dataset_path: str, doPerturb: bool, dropna: bool = True):
     # drop the rows with missing values
     # df.reset_index(inplace=True, drop=True)
 
+    # 取10%的数据
+    df = df.iloc[:int(np.floor(len(df) * frac))]
+
     data = df.iloc[:, :-1]
+    # 将data每列的数据类型转换为float
+    data = data.astype(float)
     label = df.iloc[:, -1]
 
     le = LabelEncoder()
@@ -37,8 +45,8 @@ def preprocess_data(dataset_path: str, doPerturb: bool, dropna: bool = True):
     return data, label, k, _data
 
 
-def get_data_from_local(dataset_path: str, doPerturb: bool = False, dropna: bool = True):
-    return preprocess_data(dataset_path, doPerturb, dropna=True)
+def get_data_from_local(dataset_path: str, doPerturb: bool = False, dropna: bool = True, frac=1):
+    return preprocess_data(dataset_path, doPerturb, dropna=True, frac=frac)
 
 
 def list_available_datasets():

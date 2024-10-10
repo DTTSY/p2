@@ -1,53 +1,57 @@
 import java.util.*;
 
 public class Main {
+    public static int maxProfit(int[] start, int[] end, int[] profit) {
+        int n = start.length;
 
-    static List<List<Integer>> tree; // 树的邻接表表示
-    static int[] childCount; // 存储每个节点的子节点数量 public static void main(String[] args) {
+        // 按项目的结束时间排序，保持start、end、profit同步排序
+        Integer[] indices = new Integer[n];
+        for (int i = 0; i < n; i++) {
+            indices[i] = i;
+        }
+
+        // 根据结束时间对项目进行排序
+        Arrays.sort(indices, (i1, i2) -> Integer.compare(end[i1], end[i2]));
+
+        // 动态规划数组
+        int[] dp = new int[n];
+
+        // 初始化第一个项目的最大收益
+        dp[0] = profit[indices[0]];
+
+        // 计算每个项目的最大收益
+        for (int i = 1; i < n; i++) {
+            // 当前项目的索引
+            int currentIndex = indices[i];
+
+            // 不选当前项目的收益
+            int includeProfit = profit[currentIndex];
+
+            // 使用 binarySearch 查找不冲突的项目
+            int lastNonConflictingIndex = Arrays.binarySearch(end, 0, i, start[currentIndex]);
+            if (lastNonConflictingIndex < 0) {
+                // 如果没有精确匹配，返回的是一个负数，表示插入点位置。
+                // 我们需要找到最近的非冲突项目，因此取 `-(lastNonConflictingIndex + 1) - 1`
+                lastNonConflictingIndex = -(lastNonConflictingIndex + 1) - 1;
+            }
+
+            if (lastNonConflictingIndex != -1) {
+                includeProfit += dp[lastNonConflictingIndex];
+            }
+
+            // 状态转移方程，选择不冲突的最大收益
+            dp[i] = Math.max(dp[i - 1], includeProfit);
+        }
+
+        // 返回最大的收益
+        return dp[n - 1];
+    }
 
     public static void main(String[] args) {
-        Scanner scanner = new Scanner(System.in);
-        System.out.println("输入节点数量 n:");
-        int n = scanner.nextInt();
-        tree = new ArrayList<>();
-        childCount = new int[n + 1];
+        int[] start = { 1, 2, 3, 3 };
+        int[] end = { 3, 4, 5, 6 };
+        int[] profit = { 50, 10, 40, 70 };
 
-        for (int i = 0; i <= n; i++) {
-            tree.add(new ArrayList<>());
-        }
-
-        System.out.println("输入 n-1 个边，每行两个数 u 和 v，表示 v 是 u 的子节点:");
-        for (int i = 1; i < n; i++) {
-            int u = scanner.nextInt();
-            int v = scanner.nextInt();
-            tree.get(u).add(v); // 假设输入已确保 u 是父节点
-        }
-
-        // 计算每个节点的子节点数量
-        dfs(1); // 假设根节点为 1
-
-        // 根据子节点数量分组
-        Map<Integer, List<Integer>> groups = new HashMap<>();
-        for (int i = 1; i <= n; i++) {
-            groups.computeIfAbsent(childCount[i], k -> new ArrayList<>()).add(i);
-        }
-
-        // 输出分组结果
-        for (Map.Entry<Integer, List<Integer>> entry : groups.entrySet()) {
-            System.out.println("子节点数 " + entry.getKey() + ": " + entry.getValue());
-        }
-
-        scanner.close();
+        System.out.println("最大收益: " + maxProfit(start, end, profit)); // 输出: 120
     }
-
-    // 深度优先搜索计算子节点数
-    static void dfs(int node) {
-        int count = 0;
-        for (int child : tree.get(node)) {
-            dfs(child);
-            count += 1 + childCount[child]; // 子节点本身加上其子节点的总数
-        }
-        childCount[node] = count;
-    }
-
 }

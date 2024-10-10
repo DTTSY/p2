@@ -251,7 +251,7 @@ def experiment(data, real_labels, title):
     clusterings, runtimes, ml, cl, interactions = clusterer.cluster(
         data, real_labels, range(data.shape[0]))
     ARI_record_percent50 = clusterings
-    result_to_csv(ARI_record_percent50, title)
+    # result_to_csv(ARI_record_percent50, title)
     return clusterings
 
 

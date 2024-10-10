@@ -11,6 +11,7 @@ from sklearn.model_selection import KFold
 from matplotlib import pyplot as plt
 from sklearn import cluster as cluster_methods
 from sklearn.neighbors import NearestNeighbors
+import scipy
 # 导入labelencodeer
 # from sklearn.preprocessing import LabelEncoder
 from myutil import DataLoader
@@ -142,7 +143,7 @@ class PRS():
         if divide_method == 'kmeans':
             sub_data = self.divide_data_kmeans(num_thread)
         elif divide_method == 'PRSC':
-            sub_data = self.divide_data_PRSC(1)
+            sub_data = self.divide_data_PRSC(num_thread)
         else:
             sub_data = self.divide_data_random(num_thread)
         # sub_data = self.divide_data_random(num_thread)
@@ -304,8 +305,12 @@ class PRS():
                          self.boundary_nodes, threshold_clusters, self.s_score)
         thread.start()
         thread.join()
-        sup_nodes = (ne[0][0])
-        edges.update(ne[0][1])
+        sup_nodes = ()
+        try:
+            sup_nodes = (ne[0][0])
+            edges.update(ne[0][1])
+        except:
+            sup_nodes = ()
 
         # print('110:', len(edges.keys()))
         return sup_nodes, edges
@@ -733,18 +738,32 @@ class cluster(threading.Thread):
             self.data, self.boundary_nodes))
 
     def aggregate(self, data: pd.DataFrame, boundary_nodes):
-        # row_names = data.columns.values.tolist()
         row_names = data.index.values.tolist()
+        if data.shape[0] == 0:
+            return set(), {}
+        elif data.shape[0] == 1:
+            # data.values.tolist()
+            return set(), {row_names[0]: row_names[0]}
+
+        # row_names = data.columns.values.tolist()
         # row_names = data._stat_axis.values.tolist()
 
         # print(data)
         # 1. get the adjacent matrix and the corresponding relational matrix
+        # A, R = get_adjacent_matrix_sparse(data)
+
         A, R = get_adjacent_matrix(data)
+        # A.eliminate_zeros()
+        # R.eliminate_zeros()
 
         # 2. get supporting nodes
         # print('R',R)
+
         sup_nodes = self.get_supporting_nodes(
             data, R, row_names, boundary_nodes)
+
+        # sup_nodes = self.get_supporting_nodes_sparse(
+        #     data, R, row_names, boundary_nodes)
 
         # print("thread-", self.threadID, '3: supporting node:', sup_nodes)
 
@@ -929,6 +948,108 @@ class cluster(threading.Thread):
         # print(self.cont, supporting_nodes)
         return supporting_nodes
 
+    def get_supporting_nodes_sparse(self, data, R, row_names, boundary_nodes):
+        candidates = set(range(R.shape[0]))
+        supporting_nodes = set()
+        # print(R)
+        for s1 in range(R.shape[0]):
+            if R[s1].max() == 2 and s1 in candidates:
+                s2 = R[s1].argmax()  # s1和s2 是一对RNNs
+                degree_1 = R[s1].sum()
+                degree_2 = R[s2].sum()
+                # self.add_sup_node(supporting_nodes, candidates, random.random(), random.random(), s1, s2, row_names)
+                # continue
+                # print('look')
+                if degree_1 == 2 and degree_2 == 2:  # 如果是孤立的一堆RNNs，直接判断点对位置，忽略后续计算。
+                    score_1 = 0
+                    score_2 = 0
+                    for re in boundary_nodes:
+                        score_1 += self.get_boundary_distance(s1, re)
+                        score_2 += self.get_boundary_distance(s2, re)
+                    self.add_sup_node(supporting_nodes, candidates,
+                                      score_1, score_2, s1, s2, row_names)
+                    continue
+
+                n_1 = 0
+                n_2 = 0
+                di_1 = 0
+                di_2 = 0
+                for i in range(R[s1].shape[1]):
+                    if R[s1, i] > 0:
+                        n_1 += 1
+                        di_1 += R[i].sum()
+                for i in range(R[s2].shape[1]):
+                    if R[s2, i] > 0:
+                        n_2 += 1
+                        di_2 += R[i].sum()
+
+                ave_neighbor_degree_1 = di_1 / n_1
+                ave_neighbor_degree_2 = di_2 / n_2
+
+                if ave_neighbor_degree_1 == ave_neighbor_degree_2:
+                    score_1 = 0
+                    score_2 = 0
+                    for re in boundary_nodes:
+                        score_1 += self.get_boundary_distance(s1, re)
+                        score_2 += self.get_boundary_distance(s2, re)
+                    self.add_sup_node(supporting_nodes, candidates,
+                                      score_1, score_2, s1, s2, row_names)
+                    continue
+
+                n_1 = 0
+                n_2 = 0
+                di_1 = 0
+                di_2 = 0
+
+                searching_ = set([s1])
+                searched = set([s1])
+                t = 0
+
+                while len(searching_) > 0:
+                    t += 1
+                    new_searching = set()
+                    for node_i in searching_:
+
+                        for node_j in range(R[node_i].shape[1]):
+                            if R[node_i, node_j] > 0 and node_j not in searched:
+                                n_1 += 1
+                                di_1 += np.linalg.norm(
+                                    data.values[node_i] - data.values[node_j]) / t
+                                searched.add(node_j)
+                                new_searching.add(node_j)
+                    searching_ = new_searching
+
+                searching_ = set([s2])
+                searched = set([s2])
+                t = 0
+                while len(searching_) > 0:
+                    t += 1
+                    new_searching = set()
+                    for node_i in searching_:
+                        for node_j in range(R[node_i].shape[1]):
+                            if R[node_i, node_j] > 0 and node_j not in searched:
+                                n_2 += 1
+                                di_2 += np.linalg.norm(
+                                    data.values[node_i] - data.values[node_j]) / t
+                                searched.add(node_j)
+                                new_searching.add(node_j)
+                    searching_ = new_searching
+
+                centrality_1 = di_1 / n_1
+                centrality_2 = di_2 / n_2
+
+                score_1 = (ave_neighbor_degree_1 / (ave_neighbor_degree_1 + ave_neighbor_degree_2) +
+                           centrality_2 / (centrality_1 + centrality_2)) / 2
+                score_2 = 1 - score_1
+                # print('look 397', score_1, score_2)
+                self.s_score[s1] = score_1
+                self.s_score[s2] = score_2
+                self.add_sup_node(supporting_nodes, candidates,
+                                  score_1, score_2, s1, s2, row_names)
+        # self.cont += 1
+        # print(self.cont, supporting_nodes)
+        return supporting_nodes
+
 
 def get_tree(edges):
     clustering_tree = {}
@@ -957,10 +1078,21 @@ def disturb_data(data: pd.DataFrame):
     return d, data.index.values.tolist()
 
 
+def get_adjacent_matrix_sparse(d):
+    neighbors = NearestNeighbors(n_neighbors=2)
+    neighbors.fit(d)
+    # A = neighbors.kneighbors_graph(d) - scipy.sparse
+    A = neighbors.kneighbors_graph(
+        d) - scipy.sparse.eye(d.shape[0], d.shape[0])
+    R = A + A.T
+    return A.tocsr(), R.tocsr()
+
+
 def get_adjacent_matrix(d):
     neighbors = NearestNeighbors(n_neighbors=2)
     neighbors.fit(d)
     A = neighbors.kneighbors_graph(d) - np.eye(len(d))
+    # A = neighbors.kneighbors_graph(d) - scipy.sparse.eye(len(d))
     R = A + A.T
     return A, R
 
@@ -1033,7 +1165,12 @@ def get_clusters_predict_labels(Graph: nx.Graph):
 @retry(retries=3, delay=0)
 def run_PRSC(data, theta, loop=1, divide_method='default', K=2):
     print(f'run PRSC with divide methodthe {divide_method} and theta {theta}')
-    num_thread = math.ceil(math.ceil(data.shape[0] / (theta * 100)))
+    # _size = math.ceil(data.shape[0] / (theta * 100))
+    # _size = math.floor(math.sqrt(data.shape[0]))
+    _size = math.floor(data.shape[0]*theta)
+    num_thread = math.ceil(min(data.shape[0], _size))
+    # num_thread = math.ceil(
+    #     math.ceil(data.shape[0] / math.floor(math.sqrt(data.shape[0]))))
     K = num_thread
     # print(label)
     for i in range(loop):
